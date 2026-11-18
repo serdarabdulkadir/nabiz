@@ -38,7 +38,11 @@ final class AlertCenter {
         started = true
         loadStates()
         center?.delegate = delegate
-        Task { await refreshAuthorization(requestIfNeeded: true) }
+        Task {
+            await refreshAuthorization(requestIfNeeded: true)
+            // Reddedilmisse macOS yeniden sormaz: acilista kendi penceremizle Sistem Ayarlari'na yonlendir.
+            if authorization == .denied { NotifPrompt.showIfNeeded() }
+        }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil,
                                                queue: .main) { _ in
             Task { @MainActor in await AlertCenter.shared.refreshAuthorization(requestIfNeeded: false) }
@@ -65,6 +69,7 @@ final class AlertCenter {
         }
         NSLog("Nabiz bildirim: authorizationStatus=%ld bundle=%@", s.rawValue, Bundle.main.bundleIdentifier ?? "yok")
         authorization = s
+        if s == .authorized || s == .provisional { NotifPrompt.hide() }
     }
 
     func requestAuthorization() { Task { await refreshAuthorization(requestIfNeeded: true) } }
