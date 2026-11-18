@@ -1,0 +1,24 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+dist/
+build/
+.next/
+# Swift
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+mac/dist/
+# Android
+.gradle/
+local.properties
+*.apk
+*.aab
+android/app/build/
+.idea/
+*.iml
+
+# Yerel ajan / arac ayarlari (kisisel yollar icerir)
+.claude/
