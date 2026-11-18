@@ -11,7 +11,9 @@ enum PanelShape {
 extension View {
     @ViewBuilder
     func panelChrome() -> some View {
-        let base = self.background(PanelWindowAccessor())
+        let base = self
+            .background(PanelWindowAccessor())
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in PanelWindow.fit(height: h) }
         if #available(macOS 26, *) {
             base
                 .background { Color.clear.glassEffect(.regular, in: .rect(cornerRadius: PanelShape.radius)) }
@@ -22,6 +24,25 @@ extension View {
                 .overlay(PanelShape.shape.strokeBorder(Palette.stroke, lineWidth: 0.5))
                 .clipShape(PanelShape.shape)
         }
+    }
+}
+
+/// Panel penceresine erisim: MenuBarExtra pencereyi kendiliginden kucultmuyor, icerik boyuna biz getiririz.
+@MainActor
+enum PanelWindow {
+    static weak var window: NSWindow?
+    static var top: CGFloat?
+
+    static func fit(height: CGFloat) {
+        guard let window, height > 50 else { return }
+        let target = window.frameRect(forContentRect: NSRect(origin: .zero, size: CGSize(width: window.frame.width, height: height))).height
+        guard abs(window.frame.height - target) > 0.5 else { return }
+        var f = window.frame
+        let t = top ?? f.maxY
+        f.size.height = target
+        f.origin.y = t - target
+        window.setFrame(f, display: true)
+        DispatchQueue.main.async { window.invalidateShadow() }
     }
 }
 
@@ -38,6 +59,7 @@ private struct PanelWindowAccessor: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
+            PanelWindow.window = window
             apply(window)
             observe(window)
             // Sistem gorunumleri pencere gosterilirken yeniden kurulabilir: bir kez daha uygula.
@@ -45,6 +67,7 @@ private struct PanelWindowAccessor: NSViewRepresentable {
                 guard let window else { return }
                 self?.apply(window)
                 self?.topY = Self.anchoredTop(window)
+                PanelWindow.top = self?.topY
             }
         }
 
@@ -57,6 +80,7 @@ private struct PanelWindowAccessor: NSViewRepresentable {
                 MainActor.assumeIsolated {
                     guard let self, let window else { return }
                     self.topY = Self.anchoredTop(window)
+                    PanelWindow.top = self.topY
                 }
             })
             observers.append(nc.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self, weak window] _ in
@@ -108,6 +132,7 @@ private struct PanelWindowAccessor: NSViewRepresentable {
         /// Sistem kenar/arka plan katmanlari: saydam ve bizim yaricapimizla maskeli. Siniflar log'lanir.
         private func clearLayers(from frameView: NSView, window: NSWindow) {
             var chain: [NSView] = [frameView]
+            if let content = window.contentView { chain.insert(content, at: 0) }
             var cur = frameView.superview
             while let v = cur { chain.append(v); cur = v.superview }
             for v in chain {

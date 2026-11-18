@@ -15,13 +15,14 @@ for a in "$@"; do
 done
 PLIST_SRC="Sources/Nabiz/Info.plist"
 
-swift build -c release
+# --universal: Intel + Apple Silicon tek ikili (yayin icin)
+if [ "${UNIVERSAL:-0}" = 1 ]; then swift build -c release --arch arm64 --arch x86_64; BIN=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/$EXEC_NAME; else swift build -c release; BIN=.build/release/$EXEC_NAME; fi
 
 APP="$HOME/Applications/$APP_NAME.app"
 mkdir -p "$HOME/Applications"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp ".build/release/$EXEC_NAME" "$APP/Contents/MacOS/$EXEC_NAME"
+cp "$BIN" "$APP/Contents/MacOS/$EXEC_NAME"
 cp "$PLIST_SRC" "$APP/Contents/Info.plist"
 # Ikon varsa ekle, yoksa atla.
 if [ -f assets/AppIcon.icns ]; then

@@ -16,7 +16,26 @@ Local network only. No cloud, no account, end‑to‑end encrypted.
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black.svg)
 ![Android 8+](https://img.shields.io/badge/Android-8%2B-black.svg)
 
+<br>
+
+<img src="assets/screenshots/mac-panel.png" width="300" alt="Nabız menu bar panel on macOS">
+
 </div>
+
+---
+
+## Quick install
+
+**macOS** (15+, Apple Silicon & Intel) — paste into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/serdarabdulkadir/nabiz/main/scripts/install-mac.sh | bash
+```
+
+**Android** (8+) — download **`Nabiz.apk`** from the [latest release](https://github.com/serdarabdulkadir/nabiz/releases/latest) and open it on your phone.
+For automatic updates, add `https://github.com/serdarabdulkadir/nabiz` to [Obtainium](https://obtainium.imranr.dev).
+
+Then open Nabız on both devices on the same Wi‑Fi and confirm the 6‑digit code. That's it.
 
 ---
 
@@ -54,23 +73,26 @@ Full wire format: [`docs/protokol.md`](docs/protokol.md).
 
 ### Install
 
-**Prebuilt:** grab `Nabiz-mac.zip` and `nabiz.apk` from [Releases](https://github.com/serdarabdulkadir/nabiz/releases).
+See [Quick install](#quick-install) above. Details:
 
-- **macOS:** unzip, move `Nabız.app` to Applications. It is ad‑hoc signed (not notarized), so on first launch right‑click → *Open*, or run `xattr -dr com.apple.quarantine /Applications/Nabız.app`.
-- **Android:** install the APK (allow "install unknown apps"). Releases from 0.3.0 are signed with the project's release key; if you installed 0.2.0 (debug‑signed), uninstall it first and pair again. On Xiaomi / HyperOS, enable *Autostart* and set battery to *No restrictions* so the live card stays alive — the app links you to both settings.
+- **macOS:** the script downloads the latest `Nabiz-mac.zip`, copies `Nabız.app` to `/Applications` and opens it. The app is ad‑hoc signed (not notarized), so the script removes the download quarantine flag. Prefer doing it by hand? Download the zip from [Releases](https://github.com/serdarabdulkadir/nabiz/releases/latest), move the app to Applications, then right‑click → *Open* on first launch.
+- **Android:** allow "install unknown apps" for your browser or file manager. On Xiaomi / HyperOS, turn on *Autostart* and set battery to *No restrictions* so the live card stays alive (the app links you to both settings). Releases from 0.3.0 are signed with the project's release key; if you have 0.2.0 (debug‑signed) installed, uninstall it first and pair again.
+- **Notifications on Mac:** allow them when asked. If you denied them once, Nabız shows a shortcut to *System Settings → Notifications → Nabız*.
 
-**From source:**
+**Build from source:**
 
 ```bash
 # macOS (Xcode 26 / Swift 6 toolchain)
 cd mac
 swift build && swift test
-scripts/paketle.sh --ac        # builds ~/Applications/Nabız.app and opens it
+scripts/paketle.sh --ac                 # ~/Applications/Nabız.app, opens it
+UNIVERSAL=1 scripts/paketle.sh          # Intel + Apple Silicon build
 
 # Android (JDK 17)
 cd android
 ./gradlew assembleDebug testDebugUnitTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
+# Release signing: create android/keystore.properties (storeFile, storePassword, keyAlias, keyPassword)
 ```
 
 ### Project layout
@@ -110,6 +132,8 @@ Run `swift test` and `./gradlew testDebugUnitTest` before opening a PR. Both tes
 - **Bağlantı:** yalnız yerel ağ (Bonjour), 6 haneli kodla eşleşme, uçtan uca şifreli. Bulut ve hesap yok. Evden uzaktayken Tailscale.
 - **Uyarılar:** pil, şarj, depolama, CPU, bellek, ısınma ve bağlantı için cihaz başına eşik.
 
-Kurulum için yukarıdaki *Install* bölümüne, protokol için [`docs/protokol.md`](docs/protokol.md), tasarım dili için [`docs/tasarim.md`](docs/tasarim.md) dosyasına bakın. iOS sürümü yol haritasında.
+**Kurulum:** Mac'te Terminal'e yukarıdaki *Quick install* komutunu yapıştırın; Android'de [son sürümden](https://github.com/serdarabdulkadir/nabiz/releases/latest) `Nabiz.apk` dosyasını indirip açın. İki cihazda da Nabız'ı aynı Wi‑Fi'da açıp 6 haneli kodu onaylayın.
+
+Ayrıntılı kurulum için *Install* bölümüne, protokol için [`docs/protokol.md`](docs/protokol.md), tasarım dili için [`docs/tasarim.md`](docs/tasarim.md) dosyasına bakın. iOS sürümü yol haritasında.
 
 Lisans: MIT.

@@ -37,11 +37,54 @@ public enum BatterySampler {
         guard IORegistryEntryCreateCFProperties(svc, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
               let dict = props?.takeRetainedValue() as? [String: Any] else { return (nil, nil) }
         let cycles = dict["CycleCount"] as? Int
-        let design = dict["DesignCapacity"] as? Int
-        // Apple Silicon'da MaxCapacity yuzdedir; ham mAh degeri AppleRawMaxCapacity'dedir.
+        // 1) Sistemin kendi "Maksimum Kapasite" degeri (Sistem Ayarlari ile birebir). 2) Ham mAh orani:
+        // yeni macOS'ta ham degerler "BatteryData" alt sozlugunde. Ust duzey MaxCapacity Apple Silicon'da hep
+        // 100 (yuzde olcegi) oldugu icin saglik olarak KULLANILMAZ; okunamazsa nil ("--").
+        let nested = dict["BatteryData"] as? [String: Any] ?? [:]
+        let design = (dict["DesignCapacity"] as? Int) ?? (nested["DesignCapacity"] as? Int)
         let raw = (dict["AppleRawMaxCapacity"] as? Int) ?? (dict["NominalChargeCapacity"] as? Int)
-        var health = healthPercent(maxCapacity: raw, designCapacity: design)
-        if health == nil, let m = dict["MaxCapacity"] as? Int, m <= 100, m > 0 { health = m }
+            ?? (nested["NominalChargeCapacity"] as? Int)
+        let health = SystemBatteryHealth.cached() ?? healthPercent(maxCapacity: raw, designCapacity: design)
         return (cycles, health)
+    }
+}
+
+/// `system_profiler SPPowerDataType -json` icindeki sistem saglik yuzdesi; 6 saatte bir okunur (yavas komut).
+enum SystemBatteryHealth {
+    nonisolated(unsafe) private static var value: Int?
+    nonisolated(unsafe) private static var readAt: Date?
+    private static let lock = NSLock()
+
+    static func cached() -> Int? {
+        lock.lock(); defer { lock.unlock() }
+        if let t = readAt, Date().timeIntervalSince(t) < 6 * 3600 { return value }
+        readAt = Date()
+        value = read()
+        return value
+    }
+
+    private static func read() -> Int? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
+        p.arguments = ["SPPowerDataType", "-json"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return parse(data)
+    }
+
+    /// "sppower_battery_health_maximum_capacity": "%90" ya da "90%" -> 90.
+    public static func parse(_ data: Data) -> Int? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = root["SPPowerDataType"] as? [[String: Any]] else { return nil }
+        for item in items {
+            if let info = item["sppower_battery_health_info"] as? [String: Any],
+               let s = info["sppower_battery_health_maximum_capacity"] as? String,
+               let n = Int(s.filter(\.isNumber)), (1...100).contains(n) { return n }
+        }
+        return nil
     }
 }
