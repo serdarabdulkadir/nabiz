@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -16,13 +18,27 @@ android {
         applicationId = "com.nabiz.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
+
+    // android/keystore.properties (storeFile, storePassword, keyAlias, keyPassword) varsa release ondan imzalanir; yoksa debug anahtari (CI kirilmasin).
+    val keystoreProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.isFile) f.inputStream().use { load(it) }
+    }
+    val releaseSigning = if (keystoreProps.getProperty("storeFile") != null) {
+        signingConfigs.create("release") {
+            storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+            storePassword = keystoreProps.getProperty("storePassword")
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+        }
+    } else signingConfigs.getByName("debug")
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

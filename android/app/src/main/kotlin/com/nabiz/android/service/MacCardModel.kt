@@ -95,7 +95,7 @@ data class MacCardModel(
             val ramV = s?.mem?.let { pctOrNull(it.used, it.total) }
             val diskV = s?.disk?.let { pctOrNull(it.used, it.total) }
             val short = criticalChip(cpu, ramV, diskV)
-            val sub = if (state.via == com.nabiz.android.peer.LinkVia.REMOTE) "Uzak (Tailscale)" else "Yerel ağ"
+            val sub = (if (state.via == com.nabiz.android.peer.LinkVia.REMOTE) "Uzak (Tailscale)" else "Yerel ağ") + (state.rttMs?.let { " · $it ms" } ?: "")
             val canliTitle = (if (pil != null) "$name · %$pil" else name) + lock
             return when (style) {
                 NotifStyle.CANLI -> MacCardModel(

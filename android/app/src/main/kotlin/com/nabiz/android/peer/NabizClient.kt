@@ -26,7 +26,7 @@ import java.security.SecureRandom
 enum class LinkPhase { IDLE, SEARCHING, CONNECTING, AWAIT_SAS, READY }
 
 /** Kopma nedeni (arayuzde tek satir). */
-enum class LinkReason { NONE, NOT_FOUND, LOST, REJECTED, KEY_CHANGED, PROTOCOL, SLEEPING }
+enum class LinkReason { NONE, NOT_FOUND, LOST, REJECTED, KEY_CHANGED, PROTOCOL, SLEEPING, VERSION }
 
 /** Baglanti yolu: yerel ag (NSD) ya da uzak adres (Tailscale). */
 enum class LinkVia { LOCAL, REMOTE }
@@ -45,6 +45,10 @@ data class LinkState(
     val via: LinkVia = LinkVia.LOCAL,
     /** Mac'ten son mesajin alindigi an (epoch ms): "son gorulme". */
     val lastSeenAt: Long = 0L,
+    /** Son 5 ping-pong olcumunun ortancasi (ms); olcum yoksa null. */
+    val rttMs: Int? = null,
+    /** Surum uyumsuzlugunda karsinin protokol surumu (reason = VERSION). */
+    val peerVersion: Int? = null,
 )
 
 /** Kopus nedeni: Mac uykuya gidiyordu dedikten sonra kopus (ya da bulunamama) "uykuda" sayilir. */
@@ -82,6 +86,8 @@ class NabizClient(
     private var job: Job? = null
     private var desiredSub = 10
     private var nextId = 1L
+    private val rtt = RttTracker()
+    private var versionPeer: Int? = null
     private var localClose: CloseReason? = null
     @Volatile private var readyReached = false
 
@@ -117,7 +123,7 @@ class NabizClient(
 
     fun sendCmd(eylem: String) = withSession { it.send(PeerMessage.Cmd(eylem, nextId++)) }
 
-    fun sendPing() = withSession { it.send(PeerMessage.Ping()) }
+    fun sendPing() = withSession { it.send(PeerMessage.Ping(rtt.onSent(System.nanoTime()))) }
 
     private fun withSession(block: (PeerSession) -> List<PeerEvent>) {
         synchronized(lock) {
@@ -173,11 +179,12 @@ class NabizClient(
             var reason = runConnection(chosen, backoff)
             if (via == LinkVia.REMOTE && !readyReached && reason == LinkReason.LOST) reason = LinkReason.NOT_FOUND
             android.util.Log.i("NabizLink", "koptu: $reason")
-            _state.update { it.copy(phase = LinkPhase.SEARCHING, sas = null, reason = disconnectReason(reason, it.macState)) }
+            _state.update { it.copy(phase = LinkPhase.SEARCHING, sas = null, reason = disconnectReason(reason, it.macState), rttMs = null, peerVersion = if (reason == LinkReason.VERSION) versionPeer else null) }
             // Mac yeniden baslayinca port degisir; NSD eski cozumu "guncelleme" olarak bildirir ve
             // onServiceFound tekrar gelmez. Her kopuşta kesfi bastan baslat ki bayat adres kullanilmasin.
             discovery.restart()
-            delay(wait)
+            // Surum uyumsuzlugu hizli yeniden deneme dongusune girmez: en uzun geri cekilme.
+            delay(if (reason == LinkReason.VERSION) backoff.longest() else wait)
         }
     }
 
@@ -194,6 +201,8 @@ class NabizClient(
 
     private suspend fun runConnection(target: MacService, backoff: ReconnectBackoff): LinkReason {
         localClose = null
+        versionPeer = null
+        rtt.reset()
         val sock = Socket()
         val wr = Channel<ByteArray>(Channel.UNLIMITED)
         val scope = CoroutineScope(currentCoroutineContext())
@@ -247,7 +256,8 @@ class NabizClient(
     private fun reasonOf(c: CloseReason?): LinkReason = when (c) {
         CloseReason.SAS_REJECTED -> LinkReason.REJECTED
         CloseReason.KEY_CHANGED -> LinkReason.KEY_CHANGED
-        CloseReason.PROTOCOL, CloseReason.VERSION, CloseReason.ROLE, CloseReason.CRYPTO -> LinkReason.PROTOCOL
+        CloseReason.VERSION -> LinkReason.VERSION
+        CloseReason.PROTOCOL, CloseReason.ROLE, CloseReason.CRYPTO -> LinkReason.PROTOCOL
         else -> LinkReason.LOST
     }
 
@@ -276,13 +286,18 @@ class NabizClient(
                 _state.update { it.copy(phase = LinkPhase.READY, sas = null, reason = LinkReason.NONE, macState = null, lastSeenAt = System.currentTimeMillis()) }
             }
             is PeerEvent.Received -> onMessage(e.message)
-            is PeerEvent.Closed -> { closed = e.reason; android.util.Log.i("NabizLink", "oturum kapandi: ${e.reason}") }
+            is PeerEvent.Closed -> {
+                closed = e.reason
+                if (e.reason == CloseReason.VERSION) versionPeer = session?.peerVersion
+                android.util.Log.i("NabizLink", "oturum kapandi: ${e.reason}")
+            }
         }
         if (ready) {
             // Sira: hello (oturum yolladi), sub, hemen bir stats.
             val s = session
             if (s != null) {
                 emit(s.send(PeerMessage.Sub(desiredSub)))
+                emit(s.send(PeerMessage.Ping(rtt.onSent(System.nanoTime()))))
                 statsProvider()?.let { emit(s.send(PeerMessage.Stats(it))) }
             }
         }
@@ -298,14 +313,24 @@ class NabizClient(
         _state.update { it.copy(lastSeenAt = System.currentTimeMillis()) }
         when (m) {
             is PeerMessage.MacState -> _state.update { it.copy(macState = m) }
-            is PeerMessage.Hello -> _state.update { it.copy(macName = m.ad) }
+            is PeerMessage.Hello -> {
+                _state.update { it.copy(macName = m.ad) }
+                if (m.protokol != 1) {
+                    // hello.protokol da hs.v gibi karsilastirilir: uyumsuzsa oturum kapatilir.
+                    versionPeer = m.protokol
+                    localClose = CloseReason.VERSION
+                    writer?.close()
+                    try { socket?.close() } catch (_: Exception) { }
+                }
+            }
             is PeerMessage.Ping -> emit(s.send(PeerMessage.Pong(m.id)))
             is PeerMessage.Stats -> _state.update { it.copy(macSnap = m.snap, macSnapAt = System.currentTimeMillis()) }
             is PeerMessage.Sub -> _peerInterval.value = m.aralikSn.coerceIn(1, 60)
             is PeerMessage.CmdResult -> _results.tryEmit(CmdOutcome(m.eylem, m.sonuc))
             is PeerMessage.Cmd -> emit(s.send(PeerMessage.Err("bilinmeyen_tip", "cmd", m.id)))
             is PeerMessage.Unknown -> emit(s.send(PeerMessage.Err("bilinmeyen_tip", m.type, m.id)))
-            is PeerMessage.Pong, is PeerMessage.Err -> {}
+            is PeerMessage.Pong -> rtt.onPong(m.id, System.nanoTime())?.let { ms -> _state.update { it.copy(rttMs = ms) } }
+            is PeerMessage.Err -> {}
         }
     }
 }

@@ -55,9 +55,15 @@ final class AlertCenter {
         guard let center else { return }
         var s = await center.notificationSettings().authorizationStatus
         if s == .notDetermined && requestIfNeeded {
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            do {
+                let granted = try await center.requestAuthorization(options: [.alert, .sound])
+                NSLog("Nabiz bildirim: requestAuthorization granted=%d", granted ? 1 : 0)
+            } catch {
+                NSLog("Nabiz bildirim: requestAuthorization hata: %@", String(describing: error))
+            }
             s = await center.notificationSettings().authorizationStatus
         }
+        NSLog("Nabiz bildirim: authorizationStatus=%ld bundle=%@", s.rawValue, Bundle.main.bundleIdentifier ?? "yok")
         authorization = s
     }
 
@@ -95,14 +101,16 @@ final class AlertCenter {
 
     private func finish(_ fires: [AlertFire]) {
         savePersisted()
-        for f in fires { post(title: f.baslik, body: f.metin, id: "\(f.ruleId.rawValue).\(f.subject.rawValue)") }
+        for f in fires { NSLog("Nabiz bildirim: kural tetiklendi %@", f.ruleId.rawValue); post(title: f.baslik, body: f.metin, id: "\(f.ruleId.rawValue).\(f.subject.rawValue)") }
     }
 
     private func post(title: String, body: String, id: String) {
         guard let center else { return }
         let c = UNMutableNotificationContent()
         c.title = title; c.body = body; c.sound = .default
-        center.add(UNNotificationRequest(identifier: "\(id).\(UUID().uuidString)", content: c, trigger: nil))
+        center.add(UNNotificationRequest(identifier: "\(id).\(UUID().uuidString)", content: c, trigger: nil)) { error in
+            NSLog("Nabiz bildirim: gonderildi id=%@ hata=%@", id, error.map { String(describing: $0) } ?? "yok")
+        }
     }
 
     private static func macName() -> String { (SCDynamicStoreCopyComputerName(nil, nil) as String?) ?? "Mac" }

@@ -8,6 +8,38 @@ enum SettingsKey {
     static let cmdSleep = "cmd.sleep"       // varsayilan kapali
 }
 
+/// Panel bolumleri (Mac'e ozel ek olcumler); hepsi varsayilan acik.
+enum PanelModule: String, CaseIterable, Identifiable {
+    case history, processes, sensors, devices
+    var id: String { rawValue }
+    var key: String { "panel.\(rawValue)" }
+    var title: String {
+        switch self {
+        case .history: "Son 10 dk grafiği"
+        case .processes: "Süreçler"
+        case .sensors: "Sıcaklık ve fan"
+        case .devices: "Bluetooth cihazları"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .history: "CPU, bellek ve ağın son 10 dakikası."
+        case .processes: "En çok CPU kullanan 5 süreç; yalnız panel açıkken ölçülür."
+        case .sensors: "CPU sıcaklığı ve (varsa) fan hızı."
+        case .devices: "Bağlı klavye, fare ve kulaklıkların pil yüzdesi."
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .history: "chart.xyaxis.line"
+        case .processes: "list.number"
+        case .sensors: "thermometer.medium"
+        case .devices: "headphones"
+        }
+    }
+    var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+}
+
 enum BarModule: String, CaseIterable, Identifiable {
     case cpu, ram, disk, battery, network, gpu, phone
     var id: String { rawValue }

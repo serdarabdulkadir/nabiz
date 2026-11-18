@@ -37,6 +37,9 @@ class PeerSession(
         private set
     var peerName: String = ""
         private set
+    /** Karsinin `hs.v` degeri (surum uyumsuzlugunda kullaniciya gosterilir); okunamadiysa null. */
+    var peerVersion: Int? = null
+        private set
 
     private val frames = PeerFrameBuffer()
     private var sealer: PeerSealer? = null
@@ -115,6 +118,7 @@ class PeerSession(
             val m = PeerJson.parse(String(frame, Charsets.UTF_8)) as? Map<*, *>
             if (m == null || m["t"] != "hs") return close(CloseReason.PROTOCOL, events)
             val v = (m["v"] as? Number)?.toInt()
+            peerVersion = v
             if (v != 1) return close(CloseReason.VERSION, events)
             if (m["rol"] != (if (role == PeerRole.MAC) PeerRole.TELEFON else PeerRole.MAC).wire) return close(CloseReason.ROLE, events)
             val pub = Base64.getDecoder().decode(m["pub"] as? String ?: return close(CloseReason.PROTOCOL, events))

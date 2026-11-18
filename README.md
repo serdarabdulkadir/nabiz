@@ -26,9 +26,10 @@ Local network only. No cloud, no account, end‑to‑end encrypted.
 
 | | macOS app | Android app |
 |---|---|---|
-| **Own stats** | CPU (performance / efficiency cores), GPU, memory + pressure, disk, network ↑↓, battery health & cycles, uptime | Battery (level, charging, temperature), memory, storage, network, thermal status |
+| **Own stats** | CPU (performance / efficiency cores), GPU, memory + pressure, disk, network ↑↓, battery health & cycles, uptime, CPU temperature & fans, top 5 processes, Bluetooth device batteries, 10‑minute history graphs | Battery (level, charging, temperature), memory, storage, network, thermal status, 10‑minute history graphs |
 | **Other device** | Phone tab in the menu bar panel | Mac card as a **Live Update** notification (Android 16 `ProgressStyle`, shows on the status bar chip / Xiaomi HyperOS *Super Island*) |
-| **Remote actions** | — | Refresh, lock screen, sleep, wake display |
+| **Remote actions** | — | Refresh, lock screen, sleep, wake display; Quick Settings tile |
+| **Link health** | Round‑trip latency, clear version‑mismatch message | Same, plus latency in the live card |
 | **Alerts** | Battery, charging, storage, CPU, memory, thermal and connection alerts with per‑device thresholds, hysteresis and cool‑down | Same alert engine, shown on the phone |
 | **Look** | SwiftUI `MenuBarExtra`, Liquid Glass on macOS 26 (material fallback on 15), 6 menu bar styles | Jetpack Compose, light + dark, 5 notification designs |
 
@@ -56,7 +57,7 @@ Full wire format: [`docs/protokol.md`](docs/protokol.md).
 **Prebuilt:** grab `Nabiz-mac.zip` and `nabiz.apk` from [Releases](https://github.com/serdarabdulkadir/nabiz/releases).
 
 - **macOS:** unzip, move `Nabız.app` to Applications. It is ad‑hoc signed (not notarized), so on first launch right‑click → *Open*, or run `xattr -dr com.apple.quarantine /Applications/Nabız.app`.
-- **Android:** install the APK (allow "install unknown apps"). On Xiaomi / HyperOS, enable *Autostart* and set battery to *No restrictions* so the live card stays alive — the app links you to both settings.
+- **Android:** install the APK (allow "install unknown apps"). Releases from 0.3.0 are signed with the project's release key; if you installed 0.2.0 (debug‑signed), uninstall it first and pair again. On Xiaomi / HyperOS, enable *Autostart* and set battery to *No restrictions* so the live card stays alive — the app links you to both settings.
 
 **From source:**
 
@@ -84,15 +85,15 @@ assets/     logo sources
 ### Roadmap
 
 - **iOS companion** — a SwiftUI app sharing `NabizCore` that shows the Mac (and posts a Live Activity). iOS doesn't allow an always‑on background connection, so it needs its own design.
-- Temperatures & fans, Bluetooth device batteries.
-- Home‑screen widget and Quick Settings tile on Android.
-- Notarized macOS builds and a signed release APK.
+- Home‑screen widget on Android.
+- Notarized macOS builds (needs a Developer ID certificate).
+- Custom Xiaomi HyperOS *Super Island* layout (needs Xiaomi's focus‑notification allow‑list).
 
 ### Contributing
 
 Issues and pull requests are welcome. Please keep the rules in mind:
 no invented metrics (`--` when unknown), no new dependencies without a reason, logic in `NabizCore` / plain Kotlin with unit tests, UI only draws.
-Run `swift test` and `./gradlew testDebugUnitTest` before opening a PR.
+Run `swift test` and `./gradlew testDebugUnitTest` before opening a PR. Both test suites read the shared protocol fixtures in [`docs/fixtures/`](docs/fixtures), so a wire‑format change on one side breaks the other side's tests.
 
 ### License
 

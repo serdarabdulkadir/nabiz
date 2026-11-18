@@ -15,6 +15,7 @@ class NabizApp : Application() {
     val notif by lazy { NotifSettings(this) }
     val sampler by lazy { PhoneSampler(this) }
     val alerts by lazy { AlertStore(this) }
+    val history by lazy { com.nabiz.android.stats.HistoryStore() }
     /** Gorunen ad: kullanicinin telefona verdigi ad (Ayarlar > Telefon hakkinda); yoksa model. */
     val deviceName: String by lazy {
         try { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.DEVICE_NAME) } catch (_: Exception) { null }

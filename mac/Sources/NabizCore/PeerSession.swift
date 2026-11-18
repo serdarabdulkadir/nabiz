@@ -10,13 +10,23 @@ public enum PeerSessionState: Equatable, Sendable {
 public enum PeerSessionError: Error, Equatable, Sendable {
     case yanlisDurum
     case gecersizElSikisma
-    case surumUyusmuyor
+    case surumUyusmuyor(Int)   // karsi tarafin protokol surumu
     case ayniRol
     case anahtarUyusmuyor      // sabitlenmis anahtar ile gelen anahtar farkli
     case sasReddedildi
     case cerceve(PeerFrameError)
     case sifre(PeerCryptoError)
     case gecersizMesaj
+}
+
+extension PeerSessionError {
+    /// Kullaniciya gosterilecek acik neden (docs/protokol.md bolum 7, Surum uyumsuzlugu). Yoksa nil.
+    public var surumMetni: String? {
+        if case .surumUyusmuyor(let v) = self {
+            return "Telefondaki Nabız farklı protokol sürümünde (v\(v)). İki uygulamayı da güncelleyin."
+        }
+        return nil
+    }
 }
 
 public enum PeerSessionEvent: Equatable, Sendable {
@@ -155,7 +165,7 @@ public struct PeerSession: Sendable {
               let nonce = Data(base64Encoded: hs.nonce), nonce.count == PeerCrypto.nonceLength else {
             out = merge(out, fail(.gecersizElSikisma)); return
         }
-        guard hs.v == Self.protocolVersion else { out = merge(out, fail(.surumUyusmuyor)); return }
+        guard hs.v == Self.protocolVersion else { out = merge(out, fail(.surumUyusmuyor(hs.v))); return }
         guard hs.rol != role.rawValue, PeerRole(rawValue: hs.rol) != nil else { out = merge(out, fail(.ayniRol)); return }
         if let pinned = pinnedPeerKey, pinned != pub { out = merge(out, fail(.anahtarUyusmuyor)); return }
         do {
@@ -185,6 +195,9 @@ public struct PeerSession: Sendable {
         catch { out = merge(out, fail(.gecersizMesaj)); return }
         do {
             let env = try PeerCodec.decode(plain)
+            if case .hello(let h) = env.message, h.protokol != Self.protocolVersion {
+                out = merge(out, fail(.surumUyusmuyor(h.protokol))); return
+            }
             if state == .sasBekliyor { held.append(env) } else { out.events.append(.mesaj(env)) }
         } catch PeerMessageError.bilinmeyenTip(let t) {
             if state == .kurulu { out.events.append(.bilinmeyenTip(t)) }

@@ -21,6 +21,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val sampler = PhoneSampler(app)
 
     val link: StateFlow<LinkState> = nabiz.client.state
+    val history get() = nabiz.history
     val pinned: StateFlow<PinnedMac?> = nabiz.store.pinned
 
     private val _phone = MutableStateFlow<Snapshot?>(null)

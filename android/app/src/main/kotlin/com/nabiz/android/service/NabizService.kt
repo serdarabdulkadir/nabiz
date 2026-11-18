@@ -82,6 +82,9 @@ class NabizService : Service() {
                 try {
                     NotificationManagerCompat.from(this@NabizService).notify(MacCardNotification.ID, MacCardNotification.build(this@NabizService, m))
                 } catch (_: SecurityException) { }
+                try {
+                    android.service.quicksettings.TileService.requestListeningState(this@NabizService, android.content.ComponentName(this@NabizService, NabizTileService::class.java))
+                } catch (_: Exception) { }
                 delay(1000)
             }
         }
@@ -92,6 +95,7 @@ class NabizService : Service() {
                 while (true) {
                     delay(sec * 1000L)
                     val snap = (application as NabizApp).sampler.sample()
+                    (application as NabizApp).history.addPhone(System.currentTimeMillis(), snap)
                     if (client.state.value.phase == LinkPhase.READY) client.sendStats(snap)
                     phoneAlerts(snap)
                 }
@@ -102,6 +106,7 @@ class NabizService : Service() {
             client.state.distinctUntilChangedBy { it.macSnapAt }.collect { st ->
                 val snap = st.macSnap
                 if (st.phase == LinkPhase.READY && snap != null) {
+                    (application as NabizApp).history.addMac(st.macSnapAt, snap)
                     fire(engine.evaluate(Subject.MAC, snap, System.currentTimeMillis(), st.macSnapAt, macName(st)))
                 }
             }

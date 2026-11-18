@@ -19,6 +19,9 @@ import com.nabiz.android.peer.LinkState
 import com.nabiz.android.peer.LinkVia
 import com.nabiz.android.service.MacCardModel
 import com.nabiz.android.peer.Snapshot
+import com.nabiz.android.stats.HistoryStore
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.nabiz.android.ui.theme.NabizShape
 import com.nabiz.android.ui.theme.NabizType
 import com.nabiz.android.ui.theme.Space
@@ -47,7 +50,7 @@ private fun pressureText(p: String?): String? = when (p) {
 }
 
 @Composable
-fun PhoneTab(s: Snapshot?) {
+fun PhoneTab(s: Snapshot?, history: HistoryStore) {
     val c = MaterialTheme.nabiz
     val bat = s?.battery
     val mem = s?.mem
@@ -72,10 +75,16 @@ fun PhoneTab(s: Snapshot?) {
         { m -> Tile("Termal", thermalText(s?.thermal), m) },
         { m -> Tile("Çalışma süresi", s?.uptime?.let { Format.uptime(it) } ?: none, m) },
     )
+    val batH by history.phoneBattery.collectAsState()
+    val memH by history.phoneMemory.collectAsState()
+    Pair2(
+        { m -> SparkTile("Pil", batH, batColor, m) },
+        { m -> SparkTile("Bellek", memH, levelColor(memPct, 75, 90), m) },
+    )
 }
 
 @Composable
-fun MacTab(link: LinkState, onCmd: (String) -> Unit) {
+fun MacTab(link: LinkState, onCmd: (String) -> Unit, history: HistoryStore) {
     val c = MaterialTheme.nabiz
     val s = link.macSnap
     if (link.phase != LinkPhase.READY && link.reason == LinkReason.SLEEPING) {
@@ -118,6 +127,12 @@ fun MacTab(link: LinkState, onCmd: (String) -> Unit) {
             )
         },
     )
+    val cpuH by history.macCpuSeries.collectAsState()
+    val memH by history.macMemory.collectAsState()
+    Pair2(
+        { m -> SparkTile("CPU", cpuH, levelColor(cpu?.total, 75, 90), m) },
+        { m -> SparkTile("Bellek", memH, levelColor(memPct, 75, 90), m) },
+    )
     if (cpu != null && cpu.cores.isNotEmpty()) {
         Tile(
             "Çekirdekler", "%${cpu.total}", Modifier.fillMaxWidth(),
@@ -141,7 +156,7 @@ fun MacTab(link: LinkState, onCmd: (String) -> Unit) {
 
 private fun statusLine(l: LinkState): String = when (l.phase) {
     LinkPhase.IDLE -> "Başlatılıyor"
-    LinkPhase.SEARCHING -> reasonText(l.reason) ?: "Mac aranıyor…"
+    LinkPhase.SEARCHING -> reasonText(l.reason, l.peerVersion) ?: "Mac aranıyor…"
     LinkPhase.CONNECTING -> "Bağlanılıyor" + (l.macName?.let { ": $it" } ?: "")
     LinkPhase.AWAIT_SAS -> "Eşleşme kodu onayı bekleniyor"
     LinkPhase.READY -> "Bağlı, ilk veri bekleniyor"

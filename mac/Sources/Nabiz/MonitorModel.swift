@@ -10,6 +10,12 @@ final class MonitorModel {
     private(set) var snapshot: Snapshot?
     /// Son 30 CPU degeri (menu cubugu grafik stili).
     private(set) var cpuHistory = RingBuffer<Int>(capacity: 30)
+    /// Son 10 dk (zaman damgali; panel kapaliyken de dolar).
+    private(set) var history = History<HistoryPoint>(capacity: 700)
+    static let historySeconds: Double = 600
+    /// Mac'e ozel ek olcumler: yalniz panel acikken yenilenir.
+    private(set) var extras = MacExtras()
+    private(set) var devices: [DeviceBattery] = []
     let modelName = SystemInfo.modelName()
     let chipName = SystemInfo.chipName()
 
@@ -18,6 +24,9 @@ final class MonitorModel {
     }
 
     private let sampler = Sampler()
+    private let extrasSampler = ExtrasSampler()
+    private let deviceSampler = DeviceSampler()
+    private var deviceTask: Task<Void, Never>?
 
     /// Telefondan gelen `yenile` komutu: anlik olcum al ve modele yaz.
     func refreshNow() async -> Snapshot {
@@ -30,7 +39,30 @@ final class MonitorModel {
     private func publish(_ snap: Snapshot) {
         snapshot = snap
         if let c = snap.cpu?.total { cpuHistory.append(c) }
+        history.append(HistoryPoint(snapshot: snap))
+        history.removeOldest { $0.ts < Double(snap.ts) - Self.historySeconds }
         AlertCenter.shared.macSnapshot(snap)
+    }
+
+    /// Surec, sicaklik/fan ve cihaz pilleri; ilgili bolum kapaliysa olculmez.
+    private func refreshExtras() async {
+        let wantProc = PanelModule.processes.isOn, wantSensors = PanelModule.sensors.isOn
+        if wantProc || wantSensors {
+            let e = await extrasSampler.sample(processes: wantProc, sensors: wantSensors)
+            if !Task.isCancelled { extras = e }
+        }
+        if PanelModule.devices.isOn {
+            if deviceTask == nil {
+                // Profiler yavas olabilir: dongu beklemez; DeviceSampler kendi 60 sn araligini uygular.
+                deviceTask = Task { [deviceSampler] in
+                    let d = await deviceSampler.read()
+                    self.devices = d
+                    self.deviceTask = nil
+                }
+            }
+        } else if !devices.isEmpty {
+            devices = []
+        }
     }
 
     func start() {
@@ -54,6 +86,7 @@ final class MonitorModel {
                 let snap = await sampler.sample()
                 if Task.isCancelled { break }
                 self.publish(snap)
+                if open { await self.refreshExtras() }
                 try? await Task.sleep(for: .seconds(interval))
             }
         }

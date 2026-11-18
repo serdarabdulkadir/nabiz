@@ -105,6 +105,9 @@ Kurallar:
 - Telefonda butonlar `mac.state`e gore: kilitliyse "Kilitle" pasif; ekran kapaliysa "Uyandir" gorunur; `uykuyaGidiyor` sonrasi kopus "Mac uykuda" olarak gosterilir.
 - Kilit acma YOK (macOS ucuncu parti uygulamaya izin vermez; parola saklamak guvensiz).
 - `ping` en az 15 sn'de bir; 45 sn mesaj gelmezse oturum olu, telefon yeniden baglanir (geri cekilme 2/5/15/30 sn).
+- **Gecikme (2026-11-18):** `ping` artik `id` tasir (gonderene ozel artan sayi); karsi taraf ayni `id` ile `pong` doner. Gonderen, monoton saatle gonderim-yanit farkini **RTT (ms)** olarak olcer; son 5 olcumun ortancasi arayuzde "Gecikme" olarak gosterilir. Oturum kurulunca hemen bir `ping` atilir. `id`siz eski `pong` yok sayilir (olcum yapilmaz). Kablo uzerinde yeni alan yok, eski surumlerle uyumlu.
+- **Surum uyumsuzlugu (2026-11-18):** `hs.v` farkliysa baglanti yine kapatilir ama once iki taraf da kullaniciya acik bir neden gosterir: Mac "Telefondaki Nabiz farkli protokol surumunde (v{X}). Iki uygulamayi da guncelleyin."; Android `LinkReason.VERSION` -> "Mac'teki Nabiz farkli surumde (v{X}). Iki uygulamayi da guncelleyin." Bu durumda telefon hizli yeniden deneme dongusune girmez (en uzun geri cekilme). `hello.protokol` da `hs.v` ile karsilastirilir.
+- **Ortak ornekler:** `docs/fixtures/messages.json` (mesajlar) ve `docs/fixtures/vectors.json` (bolum 8). Iki platformun testleri bu dosyalari OKUR; bu dosyalar ile bu belge tek kaynaktir.
 
 ## 8. Test vektorleri
 

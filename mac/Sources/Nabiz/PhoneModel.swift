@@ -24,6 +24,8 @@ final class PhoneModel {
     private(set) var phoneModel: String?
     private(set) var snapshot: Snapshot?
     private(set) var lastSeen: Date?
+    /// Son 5 RTT olcumunun ortancasi (ms); olcum yoksa nil.
+    private(set) var latencyMs: Int?
 
     @ObservationIgnored private let store = PeerStore()
     @ObservationIgnored private let server = PeerServer()
@@ -37,7 +39,8 @@ final class PhoneModel {
     @ObservationIgnored private var lastSent = Date()
     @ObservationIgnored private var openedAt = Date()
     @ObservationIgnored private var sasSince = Date()
-    @ObservationIgnored private var nextId = 1
+    @ObservationIgnored private var rtt = RTTTracker()
+    @ObservationIgnored private var lastPing = Date()
 
     var isConnected: Bool { link == .bagli }
 
@@ -93,6 +96,7 @@ final class PhoneModel {
         sas = nil; SASPrompt.hide()
         openedAt = Date(); lastReceived = Date(); lastSent = Date()
         interval = 10
+        rtt.reset(); latencyMs = nil
         apply(out)
         startHousekeeping()
     }
@@ -114,6 +118,7 @@ final class PhoneModel {
         sas = nil; SASPrompt.hide()
         // Eski veri yaniltmasin: bagli degilken karolar gosterilmez, ama son gorulme kalir.
         snapshot = nil
+        rtt.reset(); latencyMs = nil
     }
 
     private func apply(_ out: PeerSessionOutput) {
@@ -135,12 +140,13 @@ final class PhoneModel {
             send(.sub(aralikSn: MonitorModel.shared.panelOpen ? 2 : 10))
             sendStats(id: nil)
             sendMacState(MacStateMonitor.shared.locked, MacStateMonitor.shared.screenOff, false)
+            sendPing()
             restartStatsLoop()
         case .mesaj(let env): handle(env)
         case .bilinmeyenTip:
             send(.error(PeerError(kod: "bilinmeyen_tip")))
         case .kapandi(let err):
-            lastError = Self.describe(err)
+            if let text = Self.describe(err) { lastError = text }
             server.closeActive()
         }
     }
@@ -155,7 +161,9 @@ final class PhoneModel {
                 store.savePairedPhone(p); paired = p
             }
         case .ping: send(.pong, id: env.id)
-        case .pong, .cmdResult, .error, .macState: break
+        case .pong:
+            if rtt.pongReceived(id: env.id, at: ProcessInfo.processInfo.systemUptime) != nil { latencyMs = rtt.medianMs }
+        case .cmdResult, .error, .macState: break
         case .stats(let s):
             snapshot = s
             AlertCenter.shared.phoneSnapshot(s, ready: link == .bagli, name: phoneName ?? paired?.name)
@@ -223,12 +231,15 @@ final class PhoneModel {
             if now.timeIntervalSince(sasSince) > 60 { lastError = "Eşleşme onayı zaman aşımı"; server.closeActive() }
         case .bagli:
             if now.timeIntervalSince(lastReceived) > 45 { lastError = "Telefondan yanıt yok"; server.closeActive(); return }
-            if now.timeIntervalSince(lastSent) >= 15 { send(.ping, id: nextPingId()) }
+            if now.timeIntervalSince(lastPing) >= 15 { sendPing() }
         case .dinliyor: break
         }
     }
 
-    private func nextPingId() -> Int { defer { nextId += 1 }; return nextId }
+    private func sendPing() {
+        lastPing = Date()
+        send(.ping, id: rtt.pingSent(at: ProcessInfo.processInfo.systemUptime))
+    }
 
     // MARK: Komutlar
 
@@ -286,14 +297,14 @@ final class PhoneModel {
     }
 
     private static var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0"
     }
 
     private static func describe(_ e: PeerSessionError) -> String? {
         switch e {
         case .anahtarUyusmuyor: "Eşleşme anahtarı değişti. Önce eşleşmeyi unutup yeniden eşleştir."
         case .sasReddedildi: nil
-        case .surumUyusmuyor: "Protokol sürümü uyuşmuyor."
+        case .surumUyusmuyor: e.surumMetni
         default: "Bağlantı kapandı (\(e))."
         }
     }

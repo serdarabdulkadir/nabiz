@@ -22,3 +22,6 @@ android/app/build/
 
 # Yerel ajan / arac ayarlari (kisisel yollar icerir)
 .claude/
+
+android/keystore.properties
+*.jks

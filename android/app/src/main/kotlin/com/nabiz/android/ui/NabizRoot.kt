@@ -97,7 +97,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                                 modifier = Modifier.pressable { settings = true }.padding(horizontal = Space.md, vertical = Space.sm),
                             )
                         }
-                        Segmented(listOf("Telefon", "Mac"), tab, { tab = it })
+                        Segmented(listOf("Telefon", "Mac" + (link.rttMs?.takeIf { link.phase == LinkPhase.READY }?.let { " · $it ms" } ?: "")), tab, { tab = it })
                     }
                     Column(
                         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.lg),
@@ -115,7 +115,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                             label = "tab",
                         ) { t ->
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                                if (t == 0) PhoneTab(phone) else MacTab(link, vm::sendCmd)
+                                if (t == 0) PhoneTab(phone, vm.history) else MacTab(link, vm::sendCmd, vm.history)
                             }
                         }
                         Spacer(Modifier.height(Space.xl))
@@ -141,7 +141,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
     }
 }
 
-fun reasonText(r: LinkReason): String? = when (r) {
+fun reasonText(r: LinkReason, peerVersion: Int? = null): String? = when (r) {
     LinkReason.NONE -> null
     LinkReason.NOT_FOUND -> "Mac bulunamadı"
     LinkReason.LOST -> "Bağlantı koptu, yeniden deneniyor"
@@ -149,4 +149,5 @@ fun reasonText(r: LinkReason): String? = when (r) {
     LinkReason.KEY_CHANGED -> "Eşleşme anahtarı değişti: Ayarlar'dan eşleşmeyi unutup yeniden eşleştir"
     LinkReason.PROTOCOL -> "Protokol hatası"
     LinkReason.SLEEPING -> "Mac uykuda"
+    LinkReason.VERSION -> "Mac'teki Nabız farklı sürümde (v${peerVersion ?: "?"}). İki uygulamayı da güncelleyin."
 }

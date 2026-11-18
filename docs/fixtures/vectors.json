@@ -1,0 +1,19 @@
+{
+  "_aciklama": "docs/protokol.md bolum 8 test vektorleri, makine okunur. Mac ve Android kripto testleri bu dosyayi okur. Hex kucuk harf.",
+  "hkdf": {"ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b", "salt": "000102030405060708090a0b0c", "info": "f0f1f2f3f4f5f6f7f8f9", "length": 42, "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"},
+  "kdf": {
+    "macPriv": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "phonePriv": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+    "macNonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+    "phoneNonce": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "macPub": "04515c3d6eb9e396b904d3feca7f54fdcd0cc1e997bf375dca515ad0a6c3b4035f4536be3a50f318fbf9a5475902a221502bef0d57e08c53b2cc0a56f17d9f9354",
+    "phonePub": "041f140146bfb1b251f84f4ddbe0d4cdcfd77afd984a9520e35794021f8312bb9eec995a08b1fa7704df3dcc0b50a9665263fb7711f95f9f8a449c5096e47c892b",
+    "secret": "4fe243908f378aa1c2a69538822e6ed908c3225d8692575507c649901245150a",
+    "salt": "ba69f2c2355561d031c3e7fe8c06b0c274daab2afb207059ab9334abd561879a",
+    "macToPhone": "3e7994371738fd367f8393c81893a0371df27a71ed52fdd4142ec49917eccef0",
+    "phoneToMac": "cbe20cf9b684bdb2a428ae219e708ce69a45856684940b59a7a0165e3df6aaf8",
+    "sas": "538801"
+  },
+  "gcm": {"key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "counter": 1, "plaintext": "{\"id\":1,\"t\":\"ping\"}", "packet": "00000000000000016ef4d69866ce01322c5a7303ced6539972bd6149d15d86aae12692f305fb8fdc1a15c0"},
+  "frame": {"payload": "010203", "framed": "00000003010203"}
+}

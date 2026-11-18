@@ -10,5 +10,11 @@ class ReconnectBackoff(private val stepsMs: LongArray = longArrayOf(2_000, 5_000
         return d
     }
 
+    /** En uzun bekleme (surum uyumsuzlugu gibi kendiliginden duzelmeyen durumlar); sonraki denemeler de en uzunda kalir. */
+    fun longest(): Long {
+        index = stepsMs.size
+        return stepsMs.last()
+    }
+
     fun reset() { index = 0 }
 }

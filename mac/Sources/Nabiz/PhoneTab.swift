@@ -76,7 +76,8 @@ private struct PhoneStats: View {
         let s = phone.snapshot
         VStack(spacing: 8) {
             HStack {
-                Text([phone.phoneName, phone.phoneModel].compactMap { $0 }.joined(separator: " · "))
+                Text(([phone.phoneName, phone.phoneModel].compactMap { $0 }
+                      + (phone.latencyMs.map { ["\($0) ms"] } ?? [])).joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 if let seen = phone.lastSeen {

@@ -144,6 +144,13 @@ private struct ModulesSettings: View {
                     ToggleRow(symbol: m.symbol, title: m.title, subtitle: m.detail, key: m.key, defaultOn: m.defaultOn)
                 }
             }
+            SectionTitle(text: "Panel bölümleri")
+            Box {
+                ForEach(Array(PanelModule.allCases.enumerated()), id: \.element.id) { i, m in
+                    if i > 0 { RowDivider() }
+                    ToggleRow(symbol: m.symbol, title: m.title, subtitle: m.detail, key: m.key, defaultOn: true)
+                }
+            }
             if count > 4 {
                 Text("En çok 4 modül önerilir; fazlası menü çubuğunda sığmayabilir.")
                     .font(.caption).foregroundStyle(Color.orange)
@@ -323,13 +330,14 @@ private struct NotificationSettings: View {
             SectionTitle(text: "Bildirimler")
             Box {
                 Row(symbol: "bell", title: "Bildirimlere izin ver", subtitle: permission.text) {
-                    if center.authorization == .denied {
+                    if center.authorization != .authorized {
                         Button("Sistem Ayarları") {
                             if let u = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
                                 NSWorkspace.shared.open(u)
                             }
                         }
-                    } else if !permission.ok {
+                    }
+                    if center.authorization == .notDetermined {
                         Button("İzin iste") { center.requestAuthorization() }
                     }
                 }

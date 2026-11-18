@@ -172,3 +172,29 @@ private func sas(_ events: [PeerSessionEvent]) -> String? {
     let junk = try PeerCrypto.seal(Data("%%".utf8), key: keys.phoneToMac, counter: 101)
     #expect(mac.receive(try PeerFrame.encode(junk)).events == [.kapandi(.gecersizMesaj)])
 }
+
+@Test func surumFarkiBelirliNedenUretir() throws {
+    // hs.v = 2 olan bir karsi taraf: kapanis nedeni surum bilgisi tasir, metin protokoldeki gibi.
+    var mac = PeerSession(role: .mac, identity: PeerIdentity(), hello: helloOf("Mac", "mac"))
+    _ = mac.start()
+    let hs = #"{"t":"hs","v":2,"rol":"telefon","pub":"\#(PeerIdentity().publicKey.base64EncodedString())","nonce":"\#(PeerCrypto.randomNonce().base64EncodedString())","ad":"X"}"#
+    let out = mac.receive(try PeerFrame.encode(Data(hs.utf8)))
+    #expect(out.events == [.kapandi(.surumUyusmuyor(2))])
+    #expect(mac.state == .kapali)
+    #expect(PeerSessionError.surumUyusmuyor(2).surumMetni == "Telefondaki Nabız farklı protokol sürümünde (v2). İki uygulamayı da güncelleyin.")
+    #expect(PeerSessionError.ayniRol.surumMetni == nil)
+}
+
+@Test func helloProtokolFarkliysaKapanir() throws {
+    let mi = PeerIdentity(), pi = PeerIdentity()
+    let bad = PeerHello(ad: "Pixel", surum: "9", protokol: 2, cihazId: "p", platform: "android")
+    var mac = PeerSession(role: .mac, identity: mi, hello: helloOf("Mac", "mac"), pinnedPeerKey: pi.publicKey)
+    var phone = PeerSession(role: .telefon, identity: pi, hello: bad, pinnedPeerKey: mi.publicKey)
+    let m0 = mac.start(), p0 = phone.start()
+    _ = mac.receive(p0.frames[0])
+    let phoneOut = phone.receive(m0.frames[0])   // telefon kurulur ve protokol 2 hello'sunu yollar
+    var events: [PeerSessionEvent] = []
+    for f in phoneOut.frames { events += mac.receive(f).events }
+    #expect(events.contains(.kapandi(.surumUyusmuyor(2))))
+    #expect(mac.state == .kapali)
+}

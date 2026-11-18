@@ -14,22 +14,22 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 10) {
             picker
-            // Iki sekme ust uste durur: panel yuksekligi sekme degisince oynamaz (pencere kaymaz).
+            // Yalniz secili sekme yukseklige katki verir; pencerenin ust kenari PanelChrome'da sabit tutulur.
             ZStack(alignment: .top) {
-                MacTab(snapshot: model.snapshot, model: model)
-                    .modifier(DirectionalShift(offset: -16, active: tab != .mac))
-                    .allowsHitTesting(tab == .mac)
-                    .accessibilityHidden(tab != .mac)
-                PhoneTab(phone: PhoneModel.shared)
-                    .modifier(DirectionalShift(offset: 16, active: tab != .phone))
-                    .allowsHitTesting(tab == .phone)
-                    .accessibilityHidden(tab != .phone)
+                if tab == .mac {
+                    MacTab(snapshot: model.snapshot, model: model)
+                        .transition(.directional(forward: false))
+                } else {
+                    PhoneTab(phone: PhoneModel.shared)
+                        .transition(.directional(forward: true))
+                }
             }
             footer
         }
         .animation(Motion.spring, value: tab)
         .padding(12)
         .frame(width: 344)
+        .panelChrome()
         .onAppear { model.panelOpen = true }
         .onDisappear { model.panelOpen = false }
     }
@@ -74,6 +74,7 @@ private struct MacTab: View {
                 }
             }
             CoreBars(cpu: s?.cpu)
+            if PanelModule.history.isOn { HistoryTile(points: model.history.values) }
             VStack(spacing: 6) {
                 // Pil yoksa GPU zaten dorduncu karoda.
                 if s?.battery != nil { StatRow(label: "GPU", value: Format.percent(s?.gpu)) }
@@ -83,10 +84,23 @@ private struct MacTab: View {
                     StatRow(label: "Pil", value: batteryLine(b), critical: b.level <= 20 && !b.charging)
                     StatRow(label: "Pil sağlığı / döngü", value: "\(Format.percent(b.health)) · \(b.cycles.map(String.init) ?? Format.missing)")
                 }
+                if PanelModule.sensors.isOn {
+                    StatRow(label: "CPU sıcaklığı", value: model.extras.temperature.map { "\(Int($0.rounded())) °C" } ?? Format.missing)
+                    // Fansiz Mac'te satir hic gorunmez.
+                    if !model.extras.fans.isEmpty {
+                        StatRow(label: model.extras.fans.count > 1 ? "Fan 1" : "Fan",
+                                value: "\(model.extras.fans[0]) rpm")
+                        if model.extras.fans.count > 1 {
+                            StatRow(label: "Fan 2", value: "\(model.extras.fans[1]) rpm")
+                        }
+                    }
+                }
                 StatRow(label: "Çalışma süresi", value: Format.duration(seconds: s?.uptime))
             }
             .padding(12)
             .glassTile(cornerRadius: Radius.group)
+            if PanelModule.processes.isOn { ProcessList(processes: model.extras.processes) }
+            if PanelModule.devices.isOn { DeviceList(devices: model.devices) }
         }
     }
 
