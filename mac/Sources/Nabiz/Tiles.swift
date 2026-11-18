@@ -161,7 +161,8 @@ struct HistoryTile: View {
     var body: some View {
         if points.count >= 2 {
             let end = points.last!.ts
-            let span = MonitorModel.historySeconds
+            // Veri 10 dk'dan azsa mevcut araligi tam genislige yay (yeni acilista grafik koseye sikismasin).
+            let span = min(MonitorModel.historySeconds, max(60, end - points.first!.ts))
             let x: (HistoryPoint) -> CGFloat = { CGFloat(max(0, min(1, 1 - (end - $0.ts) / span))) }
             VStack(alignment: .leading, spacing: 8) {
                 TileTitle(text: "Son 10 dk")

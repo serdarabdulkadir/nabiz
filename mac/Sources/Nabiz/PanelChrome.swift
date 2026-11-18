@@ -44,7 +44,7 @@ private struct PanelWindowAccessor: NSViewRepresentable {
             DispatchQueue.main.async { [weak window, weak self] in
                 guard let window else { return }
                 self?.apply(window)
-                self?.topY = window.frame.maxY
+                self?.topY = Self.anchoredTop(window)
             }
         }
 
@@ -52,22 +52,36 @@ private struct PanelWindowAccessor: NSViewRepresentable {
         private func observe(_ window: NSWindow) {
             guard observers.isEmpty else { return }
             let nc = NotificationCenter.default
-            observers.append(nc.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak self, weak window] _ in
+            // Ust kenar, panel gosterildiginde sistemin koydugu yerdir (menu cubugunun hemen alti).
+            observers.append(nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self, weak window] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let window, !self.adjusting else { return }
-                    self.topY = window.frame.maxY
+                    guard let self, let window else { return }
+                    self.topY = Self.anchoredTop(window)
                 }
             })
             observers.append(nc.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self, weak window] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let window, let top = self.topY, abs(window.frame.maxY - top) > 0.5 else { return }
-                    self.adjusting = true
-                    var f = window.frame
-                    f.origin.y = top - f.height
-                    window.setFrame(f, display: true)
-                    self.adjusting = false
+                    guard let self, let window, !self.adjusting else { return }
+                    let top = self.topY ?? Self.anchoredTop(window)
+                    if abs(window.frame.maxY - top) > 0.5 {
+                        self.adjusting = true
+                        var f = window.frame
+                        f.origin.y = top - f.height
+                        window.setFrame(f, display: true)
+                        self.adjusting = false
+                    }
+                    // Yeni boyutta golge yeniden hesaplansin (eski dikdortgen golge kalmasin).
+                    DispatchQueue.main.async { window.invalidateShadow() }
                 }
             })
+        }
+
+        /// Pencerenin ust kenari: mevcut konum, ama menu cubugundan 40 pt'den fazla asagi kaymissa menu cubugunun hemen alti.
+        static func anchoredTop(_ window: NSWindow) -> CGFloat {
+            guard let screen = window.screen ?? NSScreen.main else { return window.frame.maxY }
+            let barBottom = screen.visibleFrame.maxY
+            let top = window.frame.maxY
+            return (top < barBottom - 40 || top > screen.frame.maxY) ? barBottom - 6 : top
         }
 
         private func apply(_ window: NSWindow) {
