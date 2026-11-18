@@ -1,5 +1,9 @@
 package com.nabiz.android.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +32,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.nabiz.android.phone.ShareKey
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +60,38 @@ fun SettingsScreen(vm: MainViewModel, pinnedName: String?, link: LinkState, onUn
     var remote by rememberSaveable { mutableStateOf(vm.remoteAddress()) }
     var saved by remember { mutableStateOf(false) }
     var probe by remember { mutableStateOf<String?>(null) }
+    val share by vm.shareFlags.collectAsStateWithLifecycle()
+    val grants by vm.systemGrants.collectAsStateWithLifecycle()
+    var pendingKey by remember { mutableStateOf<ShareKey?>(null) }
+    var deniedKey by remember { mutableStateOf<ShareKey?>(null) }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+        val key = pendingKey
+        pendingKey = null
+        if (key != null) {
+            // Arama kaydi izni (gelen numara) istenir ama zorunlu degil; zorunlu izinler `requiredPermissions`.
+            if (requiredPermissions(key).all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }) { deniedKey = null; vm.setShare(key, true) } else deniedKey = key
+            vm.refreshShare()
+        }
+    }
+    // Sistem ayarindan donunce (bildirim erisimi, uygulama izinleri) durum yeniden okunur.
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.refreshShare() }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    fun toggleShare(key: ShareKey, on: Boolean) {
+        deniedKey = null
+        if (!on) { vm.setShare(key, false); return }
+        if (key == ShareKey.BILDIRIMLER) {
+            vm.setShare(key, true)
+            if (!grants.bildirimErisimi) BackgroundAccess.openNotificationListenerSettings(ctx)
+            return
+        }
+        val perms = runtimePermissions(key)
+        if (perms.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }) vm.setShare(key, true)
+        else { pendingKey = key; permLauncher.launch(perms) }
+    }
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.md),
@@ -94,6 +136,23 @@ fun SettingsScreen(vm: MainViewModel, pinnedName: String?, link: LinkState, onUn
             RowDivider()
             Row2(if (BackgroundAccess.livePromotionOff(ctx)) "Canlı güncellemeler kapalı" else "Canlı güncellemeler", if (BackgroundAccess.livePromotionOff(ctx)) "Kapalı: açmak için dokun (durum çubuğu çipi ve dinamik ada)" else "Android 16: kartın durum çubuğunda canlı görünmesi") { BackgroundAccess.openLiveUpdateSettings(ctx) }
         }
+        SectionLabel("Mac ile paylaş")
+        Group {
+            ShareRow("Bildirimler", "Telefon bildirimleri Mac'te görünür", share.bildirimler, share.bildirimler && !grants.bildirimErisimi) { toggleShare(ShareKey.BILDIRIMLER, it) }
+            RowDivider()
+            ShareRow("Aramaları yönet", "Yanıtla, reddet, ara. Gelen numara için arama kaydı izni de istenir", share.cagriYonetimi, share.cagriYonetimi && !grants.cagri) { toggleShare(ShareKey.CAGRI, it) }
+            RowDivider()
+            ShareRow("Kişiler", "Mac'te kişi listesi ve arayan adı", share.kisiler, share.kisiler && !grants.kisiler) { toggleShare(ShareKey.KISILER, it) }
+            RowDivider()
+            ShareRow("Arama geçmişi", "Mac'te son aramalar", share.aramaGecmisi, share.aramaGecmisi && !grants.aramaGecmisi) { toggleShare(ShareKey.ARAMA_GECMISI, it) }
+        }
+        if (deniedKey != null) {
+            Text(
+                "İzin verilmedi. Uygulama ayarlarından izin ver.", style = NabizType.caption, color = c.textSecondary,
+                modifier = Modifier.pressable { BackgroundAccess.openAppDetails(ctx) }.padding(horizontal = Space.lg, vertical = Space.xs),
+            )
+        }
+        Text("Veriler yalnız eşleşmiş Mac'e şifreli gider; Mac diske yazmaz.", style = NabizType.caption, color = c.textTertiary, modifier = Modifier.padding(horizontal = Space.lg))
         SectionLabel("Uyarılar")
         AlertGroup("Telefon", Subject.TELEFON, vm.alerts)
         AlertGroup("Mac", Subject.MAC, vm.alerts)
@@ -136,6 +195,33 @@ private fun Row2(title: String, sub: String, enabled: Boolean = true, onClick: (
     ) {
         Text(title, style = NabizType.rowTitle, color = if (enabled) c.text else c.textTertiary)
         Text(sub, style = NabizType.caption, color = c.textSecondary)
+    }
+}
+
+/** Anahtarin calismasi icin gerekenler (arama yonetiminde arama kaydi yalniz gelen numara icin istenir). */
+private fun requiredPermissions(key: ShareKey): Array<String> =
+    if (key == ShareKey.CAGRI) runtimePermissions(key).filter { it != Manifest.permission.READ_CALL_LOG }.toTypedArray() else runtimePermissions(key)
+
+private fun runtimePermissions(key: ShareKey): Array<String> = when (key) {
+    ShareKey.CAGRI -> arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_CALL_LOG)
+    ShareKey.KISILER -> arrayOf(Manifest.permission.READ_CONTACTS)
+    ShareKey.ARAMA_GECMISI -> arrayOf(Manifest.permission.READ_CALL_LOG)
+    ShareKey.BILDIRIMLER -> emptyArray()
+}
+
+/** Anahtarli ayar satiri (uyari satirlariyla ayni yerlesim). `needsGrant`: anahtar acik ama sistem izni yok. */
+@Composable
+private fun ShareRow(title: String, sub: String, checked: Boolean, needsGrant: Boolean, onChange: (Boolean) -> Unit) {
+    val c = MaterialTheme.nabiz
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.sm),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = NabizType.rowTitle, color = c.text)
+            Text(if (needsGrant) "İzin gerekli" else sub, style = NabizType.caption, color = c.textSecondary)
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

@@ -1,18 +1,399 @@
 {
   "_aciklama": "Mac (NabizCore) ve Android (peer) testlerinin ORTAK okudugu ornek mesajlar. Her ornek: cozulur, yeniden kodlanir, sonuc JSON olarak (alan sirasi onemsiz) 'json' ile ayni olmali. Bir taraf alan adini degistirirse obur tarafin testi kirilir. Kaynak: docs/protokol.md bolum 7.",
   "ornekler": [
-    {"ad": "hello-mac", "json": {"t": "hello", "ad": "MacBook Air", "surum": "0.3.0", "protokol": 1, "cihazId": "6F1C2B9E-3D4A-4B5C-9E8F-0A1B2C3D4E5F", "platform": "mac", "model": "MacBook Air (M4)"}},
-    {"ad": "hello-android", "json": {"t": "hello", "ad": "Redmi Note 13 Pro", "surum": "0.3.0", "protokol": 1, "cihazId": "a1b2c3d4-e5f6-4789-abcd-0123456789ab", "platform": "android"}},
-    {"ad": "ping", "json": {"t": "ping", "id": 7}},
-    {"ad": "pong", "json": {"t": "pong", "id": 7}},
-    {"ad": "sub", "json": {"t": "sub", "aralikSn": 2}},
-    {"ad": "stats-mac", "json": {"t": "stats", "snap": {"ts": 1795000000, "cpu": {"total": 23, "cores": [10, 12, 8, 9, 30, 41, 22, 18, 35, 40], "perfCores": 4, "effCores": 6}, "mem": {"used": 11811160064, "total": 17179869184, "pressure": "normal"}, "disk": {"used": 361850839040, "total": 494384795648}, "battery": {"level": 62, "charging": false, "health": 98, "cycles": 41, "minutes": 380}, "net": {"up": 10240, "down": 524288}, "gpu": 7, "uptime": 86400}}},
-    {"ad": "stats-android", "json": {"t": "stats", "snap": {"ts": 1795000002, "mem": {"used": 5368709120, "total": 12884901888}, "disk": {"used": 120000000000, "total": 256000000000}, "battery": {"level": 81, "charging": true, "minutes": 35, "temp": 31.5}, "net": {"up": 2048, "down": 65536}, "uptime": 3600, "thermal": "normal"}}},
-    {"ad": "stats-minimal", "json": {"t": "stats", "snap": {"ts": 1795000004}}},
-    {"ad": "cmd", "json": {"t": "cmd", "id": 3, "eylem": "kilitle"}},
-    {"ad": "cmd-result", "json": {"t": "cmd.result", "id": 3, "eylem": "kilitle", "sonuc": "tamam"}},
-    {"ad": "mac-state", "json": {"t": "mac.state", "kilitli": true, "ekranKapali": false, "uykuyaGidiyor": false}},
-    {"ad": "error", "json": {"t": "error", "kod": "bilinmeyen_tip", "mesaj": "foo"}}
+    {
+      "ad": "hello-mac",
+      "json": {
+        "t": "hello",
+        "ad": "MacBook Air",
+        "surum": "0.3.0",
+        "protokol": 1,
+        "cihazId": "6F1C2B9E-3D4A-4B5C-9E8F-0A1B2C3D4E5F",
+        "platform": "mac",
+        "model": "MacBook Air (M4)"
+      }
+    },
+    {
+      "ad": "hello-android",
+      "json": {
+        "t": "hello",
+        "ad": "Redmi Note 13 Pro",
+        "surum": "0.3.0",
+        "protokol": 1,
+        "cihazId": "a1b2c3d4-e5f6-4789-abcd-0123456789ab",
+        "platform": "android"
+      }
+    },
+    {
+      "ad": "ping",
+      "json": {
+        "t": "ping",
+        "id": 7
+      }
+    },
+    {
+      "ad": "pong",
+      "json": {
+        "t": "pong",
+        "id": 7
+      }
+    },
+    {
+      "ad": "sub",
+      "json": {
+        "t": "sub",
+        "aralikSn": 2
+      }
+    },
+    {
+      "ad": "stats-mac",
+      "json": {
+        "t": "stats",
+        "snap": {
+          "ts": 1795000000,
+          "cpu": {
+            "total": 23,
+            "cores": [
+              10,
+              12,
+              8,
+              9,
+              30,
+              41,
+              22,
+              18,
+              35,
+              40
+            ],
+            "perfCores": 4,
+            "effCores": 6
+          },
+          "mem": {
+            "used": 11811160064,
+            "total": 17179869184,
+            "pressure": "normal"
+          },
+          "disk": {
+            "used": 361850839040,
+            "total": 494384795648
+          },
+          "battery": {
+            "level": 62,
+            "charging": false,
+            "health": 98,
+            "cycles": 41,
+            "minutes": 380
+          },
+          "net": {
+            "up": 10240,
+            "down": 524288
+          },
+          "gpu": 7,
+          "uptime": 86400
+        }
+      }
+    },
+    {
+      "ad": "stats-android",
+      "json": {
+        "t": "stats",
+        "snap": {
+          "ts": 1795000002,
+          "mem": {
+            "used": 5368709120,
+            "total": 12884901888
+          },
+          "disk": {
+            "used": 120000000000,
+            "total": 256000000000
+          },
+          "battery": {
+            "level": 81,
+            "charging": true,
+            "minutes": 35,
+            "temp": 31.5
+          },
+          "net": {
+            "up": 2048,
+            "down": 65536
+          },
+          "uptime": 3600,
+          "thermal": "normal"
+        }
+      }
+    },
+    {
+      "ad": "stats-minimal",
+      "json": {
+        "t": "stats",
+        "snap": {
+          "ts": 1795000004
+        }
+      }
+    },
+    {
+      "ad": "cmd",
+      "json": {
+        "t": "cmd",
+        "id": 3,
+        "eylem": "kilitle"
+      }
+    },
+    {
+      "ad": "cmd-result",
+      "json": {
+        "t": "cmd.result",
+        "id": 3,
+        "eylem": "kilitle",
+        "sonuc": "tamam"
+      }
+    },
+    {
+      "ad": "mac-state",
+      "json": {
+        "t": "mac.state",
+        "kilitli": true,
+        "ekranKapali": false,
+        "uykuyaGidiyor": false
+      }
+    },
+    {
+      "ad": "error",
+      "json": {
+        "t": "error",
+        "kod": "bilinmeyen_tip",
+        "mesaj": "foo"
+      }
+    },
+    {
+      "ad": "perm-state",
+      "json": {
+        "t": "perm.state",
+        "bildirimler": true,
+        "cagriYonetimi": true,
+        "kisiler": false,
+        "aramaGecmisi": true
+      }
+    },
+    {
+      "ad": "call-state-bosta",
+      "json": {
+        "t": "call.state",
+        "durum": "bosta"
+      }
+    },
+    {
+      "ad": "call-state-caliyor",
+      "json": {
+        "t": "call.state",
+        "durum": "caliyor",
+        "yon": "gelen",
+        "numara": "+905551112233",
+        "kisiAdi": "Ayşe"
+      }
+    },
+    {
+      "ad": "call-state-acik",
+      "json": {
+        "t": "call.state",
+        "durum": "acik",
+        "yon": "gelen",
+        "numara": "+905551112233",
+        "kisiAdi": "Ayşe",
+        "sureSn": 42
+      }
+    },
+    {
+      "ad": "call-answer",
+      "json": {
+        "t": "call.answer",
+        "id": 3
+      }
+    },
+    {
+      "ad": "call-reject",
+      "json": {
+        "t": "call.reject",
+        "id": 4
+      }
+    },
+    {
+      "ad": "call-hangup",
+      "json": {
+        "t": "call.hangup",
+        "id": 5
+      }
+    },
+    {
+      "ad": "call-dial",
+      "json": {
+        "t": "call.dial",
+        "id": 2,
+        "numara": "555"
+      }
+    },
+    {
+      "ad": "contacts-sync",
+      "json": {
+        "t": "contacts.sync",
+        "id": 6,
+        "ofset": 0,
+        "adet": 40
+      }
+    },
+    {
+      "ad": "contacts-page",
+      "json": {
+        "t": "contacts.page",
+        "id": 6,
+        "ofset": 0,
+        "toplam": 1,
+        "son": true,
+        "kisiler": [
+          {
+            "kid": "12",
+            "ad": "Ayşe Yılmaz",
+            "numaralar": [
+              {
+                "no": "+905551112233",
+                "tur": "cep"
+              }
+            ],
+            "favori": true,
+            "gruplar": []
+          }
+        ]
+      }
+    },
+    {
+      "ad": "contacts-changed",
+      "json": {
+        "t": "contacts.changed"
+      }
+    },
+    {
+      "ad": "calllog-sync",
+      "json": {
+        "t": "calllog.sync",
+        "id": 8,
+        "ofset": 0
+      }
+    },
+    {
+      "ad": "calllog-page",
+      "json": {
+        "t": "calllog.page",
+        "id": 8,
+        "ofset": 0,
+        "toplam": 2,
+        "son": true,
+        "kayitlar": [
+          {
+            "numara": "+905551112233",
+            "kisiAdi": "Ayşe Yılmaz",
+            "yon": "cevapsiz",
+            "zaman": 1795000000,
+            "sureSn": 0
+          },
+          {
+            "numara": "555",
+            "yon": "giden",
+            "zaman": 1794990000,
+            "sureSn": 125
+          }
+        ]
+      }
+    },
+    {
+      "ad": "calllog-changed",
+      "json": {
+        "t": "calllog.changed"
+      }
+    },
+    {
+      "ad": "notif-list",
+      "json": {
+        "t": "notif.list",
+        "bildirimler": [
+          {
+            "anahtar": "0|com.whatsapp|1|null|10123",
+            "paket": "com.whatsapp",
+            "uygulama": "WhatsApp",
+            "baslik": "Ayşe",
+            "metin": "Akşam geliyor musun?",
+            "zaman": 1795000100,
+            "yanitlanabilir": true,
+            "kapatilabilir": true
+          }
+        ]
+      }
+    },
+    {
+      "ad": "notif-posted",
+      "json": {
+        "t": "notif.posted",
+        "bildirim": {
+          "anahtar": "0|com.google.android.gm|7|null|10140",
+          "paket": "com.google.android.gm",
+          "uygulama": "Gmail",
+          "baslik": "Fatura",
+          "zaman": 1795000200,
+          "yanitlanabilir": false,
+          "kapatilabilir": true,
+          "ikon": "iVBORw0KGgo="
+        }
+      }
+    },
+    {
+      "ad": "notif-removed",
+      "json": {
+        "t": "notif.removed",
+        "anahtar": "0|com.whatsapp|1|null|10123"
+      }
+    },
+    {
+      "ad": "notif-dismiss",
+      "json": {
+        "t": "notif.dismiss",
+        "id": 9,
+        "anahtar": "0|com.whatsapp|1|null|10123"
+      }
+    },
+    {
+      "ad": "notif-clear",
+      "json": {
+        "t": "notif.clear",
+        "id": 10
+      }
+    },
+    {
+      "ad": "notif-reply",
+      "json": {
+        "t": "notif.reply",
+        "id": 11,
+        "anahtar": "0|com.whatsapp|1|null|10123",
+        "metin": "Geliyorum"
+      }
+    },
+    {
+      "ad": "notif-result",
+      "json": {
+        "t": "notif.result",
+        "id": 11,
+        "anahtar": "0|com.whatsapp|1|null|10123",
+        "sonuc": "tamam"
+      }
+    }
   ],
-  "hs": {"_aciklama": "El sikisma cercevesi (duz JSON). v farkliysa iki taraf da kullaniciya surum uyumsuzlugu gosterir.", "json": {"t": "hs", "v": 1, "rol": "mac", "pub": "BFFcPW6545a5BNP+yn9U/c0MwemXvzddylFa0KbDtANfRTa+OlDzGPv5pUdZAqIhUCvvDVfgjFOyzApW8X2fk1Q=", "nonce": "oKGio6SlpqeoqaqrrK2urw==", "ad": "MacBook Air"}}
+  "hs": {
+    "_aciklama": "El sikisma cercevesi (duz JSON). v farkliysa iki taraf da kullaniciya surum uyumsuzlugu gosterir.",
+    "json": {
+      "t": "hs",
+      "v": 1,
+      "rol": "mac",
+      "pub": "BFFcPW6545a5BNP+yn9U/c0MwemXvzddylFa0KbDtANfRTa+OlDzGPv5pUdZAqIhUCvvDVfgjFOyzApW8X2fk1Q=",
+      "nonce": "oKGio6SlpqeoqaqrrK2urw==",
+      "ad": "MacBook Air"
+    }
+  }
 }

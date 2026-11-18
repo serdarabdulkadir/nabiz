@@ -15,13 +15,15 @@ struct PanelView: View {
         VStack(spacing: 10) {
             picker
             // Yalniz secili sekme yukseklige katki verir; pencerenin ust kenari PanelChrome'da sabit tutulur.
-            ZStack(alignment: .top) {
-                if tab == .mac {
-                    MacTab(snapshot: model.snapshot, model: model)
-                        .transition(.directional(forward: false))
-                } else {
-                    PhoneTab(phone: PhoneModel.shared)
-                        .transition(.directional(forward: true))
+            CappedScroll {
+                ZStack(alignment: .top) {
+                    if tab == .mac {
+                        MacTab(snapshot: model.snapshot, model: model)
+                            .transition(.directional(forward: false))
+                    } else {
+                        PhoneTab(phone: PhoneModel.shared)
+                            .transition(.directional(forward: true))
+                    }
                 }
             }
             footer
@@ -48,6 +50,23 @@ struct PanelView: View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 6)
+    }
+}
+
+/// Icerik ekranin gorunur yuksekligini asmadikca aynen cizilir; asarsa kaydirilabilir olur.
+private struct CappedScroll<Content: View>: View {
+    @ViewBuilder var content: Content
+    @State private var height: CGFloat = 0
+
+    private var limit: CGFloat { max(300, (NSScreen.main?.visibleFrame.height ?? 800) - 150) }
+
+    var body: some View {
+        let measured = content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        if height > limit {
+            ScrollView(.vertical, showsIndicators: false) { measured }.frame(height: limit)
+        } else {
+            measured
+        }
     }
 }
 

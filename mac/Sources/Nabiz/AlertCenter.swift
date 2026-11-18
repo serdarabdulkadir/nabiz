@@ -6,12 +6,35 @@ import UserNotifications
 import NabizCore
 
 /// Bildirim gosterimi ve tiklama: uygulama on planda da afis cikar; tiklayinca uygulama one gelir.
+/// Telefon bildirimi kategori / eylem / kimlik on ekleri (uyari kurali kimlikleriyle cakismaz).
+enum PhoneNotifID {
+    static let prefix = "nabiz.tel."
+    static let reply = "nabiz.tel.eylem.yanitla"
+    static let dismiss = "nabiz.tel.eylem.kapat"
+    static let catReplyDismiss = "nabiz.tel.kat.yanit-kapat"
+    static let catReply = "nabiz.tel.kat.yanit"
+    static let catDismiss = "nabiz.tel.kat.kapat"
+}
+
 final class AlertNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions { [.banner, .list, .sound] }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        await MainActor.run { NSApp.activate(ignoringOtherApps: true) }
+        let action = response.actionIdentifier
+        let key = response.notification.request.content.userInfo["anahtar"] as? String
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+        await MainActor.run {
+            switch action {
+            case PhoneNotifID.reply:
+                if let key, let text { PhoneModel.shared.reply(key, text) }
+            case PhoneNotifID.dismiss:
+                if let key { PhoneModel.shared.dismiss(key) }
+            default:
+                NSApp.activate(ignoringOtherApps: true)
+                if key != nil { PhoneWindow.show(.bildirimler) }
+            }
+        }
     }
 }
 
@@ -38,6 +61,7 @@ final class AlertCenter {
         started = true
         loadStates()
         center?.delegate = delegate
+        center?.setNotificationCategories(Self.phoneCategories())
         Task {
             await refreshAuthorization(requestIfNeeded: true)
             // Reddedilmisse macOS yeniden sormaz: acilista kendi penceremizle Sistem Ayarlari'na yonlendir.
@@ -100,6 +124,60 @@ final class AlertCenter {
 
     func sendTest() {
         post(title: "Nabız: Deneme bildirimi", body: "Bildirimler çalışıyor.", id: "deneme")
+    }
+
+    // MARK: Telefon bildirimleri
+
+    private static func phoneCategories() -> Set<UNNotificationCategory> {
+        let reply = UNTextInputNotificationAction(identifier: PhoneNotifID.reply, title: "Yanıtla", options: [],
+                                                  textInputButtonTitle: "Gönder", textInputPlaceholder: "Yanıt yaz")
+        let dismiss = UNNotificationAction(identifier: PhoneNotifID.dismiss, title: "Telefonda kapat", options: [])
+        return [
+            UNNotificationCategory(identifier: PhoneNotifID.catReplyDismiss, actions: [reply, dismiss], intentIdentifiers: [],
+                                 hiddenPreviewsBodyPlaceholder: "Yeni bildirim", options: []),
+            UNNotificationCategory(identifier: PhoneNotifID.catReply, actions: [reply], intentIdentifiers: [],
+                                 hiddenPreviewsBodyPlaceholder: "Yeni bildirim", options: []),
+            UNNotificationCategory(identifier: PhoneNotifID.catDismiss, actions: [dismiss], intentIdentifiers: [],
+                                 hiddenPreviewsBodyPlaceholder: "Yeni bildirim", options: []),
+        ]
+    }
+
+    /// Yeni telefon bildirimi: "Uygulama · Baslik" / metin. Ayarlardan kapatilabilir.
+    func phoneNotification(_ n: PhoneNotification) {
+        guard UserDefaults.standard.object(forKey: SettingsKey.phoneNotifMac) as? Bool ?? true, let center else { return }
+        guard n.baslik?.isEmpty == false || n.metin?.isEmpty == false else { return }
+        let c = UNMutableNotificationContent()
+        c.threadIdentifier = n.paket
+        c.userInfo = ["anahtar": n.anahtar]
+        // Gizlilik: Mac kilitli ya da ekran kapaliyken icerik gosterilmez, eylem eklenmez.
+        let mon = MacStateMonitor.shared
+        if mon.locked || mon.screenOff {
+            c.title = "\(n.uygulama) · Yeni bildirim"
+            center.add(UNNotificationRequest(identifier: PhoneNotifID.prefix + n.anahtar, content: c, trigger: nil))
+            return
+        }
+        c.title = [n.uygulama, n.baslik].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        c.body = n.metin ?? ""
+        switch (n.yanitlanabilir, n.kapatilabilir) {
+        case (true, true): c.categoryIdentifier = PhoneNotifID.catReplyDismiss
+        case (true, false): c.categoryIdentifier = PhoneNotifID.catReply
+        case (false, true): c.categoryIdentifier = PhoneNotifID.catDismiss
+        case (false, false): break
+        }
+        center.add(UNNotificationRequest(identifier: PhoneNotifID.prefix + n.anahtar, content: c, trigger: nil))
+    }
+
+    /// Telefonda kapanan bildirimin Mac'teki kopyasini kaldirir; `keys == nil` hepsini.
+    func removePhoneNotifications(keys: [String]?) {
+        guard let center else { return }
+        if let keys {
+            center.removeDeliveredNotifications(withIdentifiers: keys.map { PhoneNotifID.prefix + $0 })
+        } else {
+            center.getDeliveredNotifications { list in
+                let ids = list.map(\.request.identifier).filter { $0.hasPrefix(PhoneNotifID.prefix) }
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+            }
+        }
     }
 
     // MARK: Ic

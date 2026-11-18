@@ -99,6 +99,7 @@ private struct PhoneStats: View {
             }
             .padding(12)
             .glassTile(cornerRadius: Radius.group)
+            PhoneExtras(phone: phone)
         }
     }
 
@@ -150,5 +151,132 @@ private struct PhoneStats: View {
         case "critical": "Kritik"
         default: Format.missing
         }
+    }
+}
+
+// MARK: Bildirimler ve aramalar (yalniz ilgili telefon izni aciksa)
+
+private struct PhoneExtras: View {
+    var phone: PhoneModel
+
+    var body: some View {
+        let perm = phone.perm
+        let notifs = PanelModule.phoneNotifs.isOn
+        let calls = PanelModule.phoneCalls.isOn
+        let showNotifs = notifs && perm.bildirimler
+        let showCalls = calls && (perm.aramaGecmisi || perm.cagriYonetimi)
+        if showNotifs { NotificationsTile(phone: phone) }
+        if showCalls { CallsTile(phone: phone) }
+        if (notifs || calls) && !perm.anyOn {
+            Text("Bildirim ve aramalar için telefonda Ayarlar > Mac ile paylaş")
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity).padding(.horizontal, 6)
+        }
+    }
+}
+
+private struct NotificationsTile: View {
+    var phone: PhoneModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TileTitle(text: "Bildirimler")
+                Spacer()
+                MiniPill(title: "Tümü") { PhoneWindow.show(.bildirimler) }
+            }
+            if phone.notifications.isEmpty {
+                Text("Bildirim yok").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(phone.notifications.prefix(3)) { n in NotificationLine(phone: phone, n: n) }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassTile(cornerRadius: Radius.group)
+    }
+}
+
+private struct NotificationLine: View {
+    var phone: PhoneModel
+    let n: PhoneNotification
+    @State private var hover = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            NotifIcon(phone: phone, paket: n.paket, size: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(PhoneFormat.notifTitle(n)).font(.caption.weight(.medium)).lineLimit(1)
+                if let m = n.metin, !m.isEmpty {
+                    Text(m).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 6)
+            if hover && n.kapatilabilir {
+                Button { phone.dismiss(n.anahtar) } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18).background(Palette.fill, in: Circle()).contentShape(Circle())
+                }
+                .buttonStyle(PressableStyle()).accessibilityLabel("Kapat")
+            } else {
+                PhoneFormat.when(n.zaman).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .frame(minHeight: 22)
+        .contentShape(Rectangle())
+        .onHover { hover = $0 }
+    }
+}
+
+private struct CallsTile: View {
+    var phone: PhoneModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TileTitle(text: "Aramalar")
+                Spacer()
+                if phone.perm.cagriYonetimi {
+                    MiniPill(title: "Ara", symbol: "phone") { PhoneWindow.show(.aramalar, keypad: true) }
+                }
+            }
+            if !phone.perm.aramaGecmisi {
+                Text("Arama geçmişi kapalı").font(.caption).foregroundStyle(.secondary)
+            } else {
+                let recent = Array((phone.callLog ?? []).sorted { $0.zaman > $1.zaman }.prefix(3))
+                if recent.isEmpty {
+                    Text(phone.callLog == nil ? "Yükleniyor…" : "Arama kaydı yok").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(recent.enumerated()), id: \.element.stableId) { _, e in CallLine(phone: phone, e: e) }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassTile(cornerRadius: Radius.group)
+    }
+}
+
+private struct CallLine: View {
+    var phone: PhoneModel
+    let e: CallLogEntry
+
+    var body: some View {
+        let missed = e.yon == .cevapsiz
+        Button { phone.dial(e.numara) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: PhoneFormat.callSymbol(e.yon)).font(.system(size: 10))
+                    .foregroundStyle(missed ? Palette.critical : Color.secondary).frame(width: 20)
+                Text(PhoneFormat.callName(e, phone)).font(.caption.weight(.medium)).lineLimit(1)
+                    .foregroundStyle(missed ? Palette.critical : Color.primary)
+                Spacer(minLength: 6)
+                PhoneFormat.when(e.zaman).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .frame(minHeight: 22)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!phone.perm.cagriYonetimi)
+        .help(phone.perm.cagriYonetimi ? "Geri ara" : "")
     }
 }

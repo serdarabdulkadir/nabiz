@@ -146,3 +146,40 @@ Iki platform bu degerleri uretebildigini dogrulamalidir. Hex kucuk harf.
 - Swift: aga bagli olmayan `PeerSession` durum makinesi + `PeerCrypto`/`PeerCipher`/`PeerFrameBuffer`/`PeerCodec` NabizCore'da (birim testli, bolum 8 vektorleri). Ag kabugu (NWListener + Bonjour) Nabiz hedefinde.
 - Kotlin: ayni durum makinesi bire bir, ayni vektorlerle JVM testi.
 - Zaman asimi: el sikisma 10 sn, SAS onayi 60 sn.
+
+## 10. Telefon: aramalar, kisiler, bildirimler (2026-11-19)
+
+Arama ve kisi mesajlari ORBIO'dan (`~/Library/bt-ekosistem/docs/telefon-kanali.md` bolum 7 + `docs/kisiler-protokolu.md`) **aynen** alindi; bildirim mesajlari yeni (ORBIO'da yalniz Figma M7 tasarimi var). Protokol surumu 1 kalir: eski surum bilinmeyen `t` icin `error` {kod:"bilinmeyen_tip"} doner, olumcul degil.
+
+**Izinler** (telefonda Ayarlar > "Mac ile paylas" anahtarlari, **hepsi varsayilan KAPALI**): `bildirimler` (Bildirim erisimi, sistem ayari), `cagriYonetimi` (READ_PHONE_STATE + ANSWER_PHONE_CALLS + CALL_PHONE), `kisiler` (READ_CONTACTS), `aramaGecmisi` (READ_CALL_LOG). Anahtar acik VE sistem izni verilmisse `true`. Izin yokken gelen istek islenmez; ayni `id` ile `error` {kod:"izin_yok", mesaj:"<izin anahtari>"}. Mac izni kapali ozelligi gostermez. Mac bu verileri diske YAZMAZ; kopunca ve izin kapaninca bellekten siler.
+
+| `t` | Yon | Alanlar |
+|---|---|---|
+| `perm.state` | tel->mac | `bildirimler`, `cagriYonetimi`, `kisiler`, `aramaGecmisi` (bool) |
+| `call.state` | tel->mac | `durum`: `bosta`/`caliyor`/`acik`/`araniyor`; `yon`: `gelen`/`giden` (bostayken yok); `numara?`, `kisiAdi?`, `sureSn?` |
+| `call.answer` / `call.reject` / `call.hangup` | mac->tel | yok |
+| `call.dial` | mac->tel | `numara` |
+| `contacts.sync` | mac->tel | `ofset`, `adet?` (varsayilan 40, en cok 100) |
+| `contacts.page` | tel->mac | `ofset`, `toplam`, `son`, `kisiler`: `[{kid, ad, numaralar:[{no, tur: cep/ev/is/diger}], favori, gruplar:[metin], foto?}]` |
+| `contacts.changed` | tel->mac | yok |
+| `calllog.sync` | mac->tel | `ofset`, `adet?` (varsayilan 100, en cok 200) |
+| `calllog.page` | tel->mac | `ofset`, `toplam`, `son`, `kayitlar`: `[{numara, kisiAdi?, yon: gelen/giden/cevapsiz, zaman (epoch sn), sureSn}]` |
+| `calllog.changed` | tel->mac | yok |
+| `notif.list` | tel->mac | `bildirimler`: `[Bildirim]` (tum guncel liste, en yeni once, en cok 50) |
+| `notif.posted` | tel->mac | `bildirim`: `Bildirim` (yeni ya da guncellenen; ayni `anahtar` yerini alir) |
+| `notif.removed` | tel->mac | `anahtar` |
+| `notif.dismiss` | mac->tel | `anahtar` (telefonda kapatir; sonra telefon `notif.removed` yollar) |
+| `notif.clear` | mac->tel | yok (kapatilabilir tum bildirimleri kapatir) |
+| `notif.reply` | mac->tel | `anahtar`, `metin` (bildirimin RemoteInput yanit eylemiyle gonderilir) |
+| `notif.result` | tel->mac | `anahtar`, `sonuc`: `tamam`/`bulunamadi`/`desteklenmiyor`/`hata` (yalniz `notif.reply` icin, istek `id`siyle) |
+
+**Bildirim** nesnesi: `anahtar` (StatusBarNotification.key), `paket`, `uygulama` (gorunen ad), `baslik?`, `metin?`, `zaman` (epoch sn), `yanitlanabilir` (bool), `kapatilabilir` (bool), `ikon?` (uygulama ikonu, en cok 64 px PNG, standart base64, en cok 6 KB; Mac pakete gore onbellekte tutar, telefon ayni paketi oturumda bir kez ikonlu yollayabilir).
+
+Kurallar:
+- Oturum kurulunca telefon `hello`dan sonra `perm.state`, `call.state` (bosta degilse) ve `bildirimler` acikse `notif.list` yollar. Izin degisince `perm.state` (ve bildirim acildiysa `notif.list`) yeniden.
+- Telefon su bildirimleri YOLLAMAZ: kendi paketi, `FLAG_ONGOING_EVENT`/`isOngoing`, grup ozeti (`FLAG_GROUP_SUMMARY`), `CATEGORY_CALL` (arama kendi kanalinda), `CATEGORY_TRANSPORT` (medya), baslik ve metni bos olanlar. Metin en cok 400 karakter (kesilir).
+- Ayni `anahtar` saniyede 1'den sik `notif.posted` olmaz (son hali gonderilir).
+- `call.state` sureSn yalniz `acik`ta; Mac sayaci kendisi yurutur.
+- Mac'te gosterilen macOS banner'lari sistemin Bildirim Merkezi'nde kalir (macOS kendi diskine yazar; uygulama yazmaz). Mac kilitli ya da ekran kapaliyken banner yalniz uygulama adini gosterir, icerik yok.
+- Sayfa/foto kurallari ORBIO `kisiler-protokolu.md` ile ayni: foto en cok 96 px JPEG 8 KB; yalniz numarali kisiler; Mac sira disi `ofset`i yoksayar, `ofset 0` listeyi sifirlar; son arama en cok 300 kayit.
+- Ornekler `docs/fixtures/messages.json` icinde `perm-state`, `call-*`, `contacts-*`, `calllog-*`, `notif-*` adlariyla.

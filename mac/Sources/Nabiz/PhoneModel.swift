@@ -27,6 +27,25 @@ final class PhoneModel {
     /// Son 5 RTT olcumunun ortancasi (ms); olcum yoksa nil.
     private(set) var latencyMs: Int?
 
+    // Telefon verisi (bolum 10): yalniz bellekte; baglanti kopunca / izin kapaninca silinir.
+    private(set) var perm = PermState()
+    private(set) var callState = CallState(durum: .bosta)
+    private(set) var callStartedAt: Date?
+    private(set) var feed = NotificationFeed()
+    private(set) var contacts = ContactsIndex()
+    private(set) var contactBook: [ContactRecord] = []
+    private(set) var contactsTotal: Int?
+    private(set) var contactsLoading = false
+    private(set) var callLog: [CallLogEntry]?
+    private(set) var callLogLoading = false
+    /// Son yanit sonucu (anahtar -> sonuc); yeni yanitta silinir.
+    private(set) var replyResults: [String: NotifResult] = [:]
+    private var icons: [String: NSImage] = [:]   // paket -> ikon (bellek)
+
+    var notifications: [PhoneNotification] { feed.items }
+    func icon(for paket: String) -> NSImage? { icons[paket] }
+    func contact(for number: String?) -> ContactRecord? { contacts.match(number: number) }
+
     @ObservationIgnored private let store = PeerStore()
     @ObservationIgnored private let server = PeerServer()
     @ObservationIgnored private var session: PeerSession?
@@ -41,6 +60,13 @@ final class PhoneModel {
     @ObservationIgnored private var sasSince = Date()
     @ObservationIgnored private var rtt = RTTTracker()
     @ObservationIgnored private var lastPing = Date()
+    @ObservationIgnored private var requestId = 100
+    @ObservationIgnored private var repliedAt: [String: Date] = [:]   // Mac'ten yanitlanan anahtar -> an (banner bastirma)
+    @ObservationIgnored private var contactsLoaded = false
+    @ObservationIgnored private var contactsDirty = false
+    @ObservationIgnored private var callLogLoaded = false
+    @ObservationIgnored private var callLogDirty = false
+    private static let contactPageSize = 40, callLogPageSize = 100, callLogLimit = 300
 
     var isConnected: Bool { link == .bagli }
 
@@ -55,6 +81,9 @@ final class PhoneModel {
         let mon = MacStateMonitor.shared
         mon.onChange = { [weak self] k, e, u in self?.sendMacState(k, e, u) }
         mon.start()
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { CallBubbleController.shared.update() }
+        }
         server.start(name: Self.computerName(), deviceId: store.deviceId())
     }
 
@@ -119,6 +148,7 @@ final class PhoneModel {
         // Eski veri yaniltmasin: bagli degilken karolar gosterilmez, ama son gorulme kalir.
         snapshot = nil
         rtt.reset(); latencyMs = nil
+        clearPhoneData()
     }
 
     private func apply(_ out: PeerSessionOutput) {
@@ -163,7 +193,37 @@ final class PhoneModel {
         case .ping: send(.pong, id: env.id)
         case .pong:
             if rtt.pongReceived(id: env.id, at: ProcessInfo.processInfo.systemUptime) != nil { latencyMs = rtt.medianMs }
-        case .cmdResult, .error, .macState: break
+        case .cmdResult, .macState: break
+        case .error(let e):
+            // Izin yokken istek islenmez: bekleyen yukleme bayragi takili kalmasin.
+            guard e.kod == "izin_yok" else { break }
+            if e.mesaj == "kisiler" { contactsLoading = false; contactsDirty = false }
+            if e.mesaj == "aramaGecmisi" { callLogLoading = false; callLogDirty = false }
+        case .permState(let p): applyPerm(p)
+        case .callState(let new):
+            updateCallClock(old: callState, new: new)
+            callState = new
+            CallBubbleController.shared.update()
+        case .contactsPage(let page): applyContactsPage(page)
+        case .contactsChanged: if perm.kisiler { requestContacts(restart: true) }
+        case .callLogPage(let page): applyCallLogPage(page)
+        case .callLogChanged: if perm.aramaGecmisi { requestCallLog(restart: true) }
+        case .notifList(let list):
+            guard perm.bildirimler else { break }
+            list.forEach(cacheIcon)
+            feed.replace(with: list)
+        case .notifPosted(let n):
+            guard perm.bildirimler else { break }
+            cacheIcon(n)
+            let changed = feed.posted(n)
+            let recentlyReplied = repliedAt[n.anahtar].map { Date().timeIntervalSince($0) < 10 } ?? false
+            if changed && !recentlyReplied { AlertCenter.shared.phoneNotification(n) }
+        case .notifRemoved(let key):
+            feed.removed(key)
+            AlertCenter.shared.removePhoneNotifications(keys: [key])
+        case .notifResult(let key, let result): replyResults[key] = result
+        case .callAnswer, .callReject, .callHangup, .callDial, .contactsSync, .callLogSync,
+             .notifDismiss, .notifClear, .notifReply: break   // mac->tel yonu; telefondan gelmez
         case .stats(let s):
             snapshot = s
             AlertCenter.shared.phoneSnapshot(s, ready: link == .bagli, name: phoneName ?? paired?.name)
@@ -173,6 +233,116 @@ final class PhoneModel {
             sendStats(id: nil)
         case .cmd(let action): runCommand(action, id: env.id)
         }
+    }
+
+    // MARK: Telefon verisi
+
+    private func nextId() -> Int { requestId += 1; return requestId }
+
+    private func clearPhoneData() {
+        perm = PermState()
+        callState = CallState(durum: .bosta); callStartedAt = nil
+        feed.clear(); icons = [:]; replyResults = [:]; repliedAt = [:]
+        clearContacts(); clearCallLog()
+        AlertCenter.shared.removePhoneNotifications(keys: nil)
+        CallBubbleController.shared.update()
+    }
+
+    private func clearContacts() {
+        contacts.reset(); contactBook = []; contactsTotal = nil
+        contactsLoading = false; contactsLoaded = false; contactsDirty = false
+    }
+
+    private func clearCallLog() {
+        callLog = nil; callLogLoading = false; callLogLoaded = false; callLogDirty = false
+    }
+
+    private func applyPerm(_ p: PermState) {
+        perm = p
+        if !p.bildirimler {
+            feed.clear(); icons = [:]; replyResults = [:]
+            AlertCenter.shared.removePhoneNotifications(keys: nil)
+        }
+        if !p.kisiler { clearContacts() } else if !contactsLoaded && !contactsLoading { requestContacts(from: 0) }
+        if !p.aramaGecmisi { clearCallLog() } else if !callLogLoaded && !callLogLoading { requestCallLog(from: 0) }
+        CallBubbleController.shared.update()
+    }
+
+    private func cacheIcon(_ n: PhoneNotification) {
+        guard icons[n.paket] == nil, let b64 = n.ikon, let data = Data(base64Encoded: b64),
+              let img = NSImage(data: data) else { return }
+        icons[n.paket] = img
+    }
+
+    /// `restart`: degisiklik bildirimi; sayfalar akiyorsa bitince bastan tekrar istenir.
+    private func requestContacts(from offset: Int = 0, restart: Bool = false) {
+        if restart && contactsLoading { contactsDirty = true; return }
+        contactsLoading = true
+        send(.contactsSync(ContactsSync(ofset: offset, adet: Self.contactPageSize)), id: nextId())
+    }
+
+    private func requestCallLog(from offset: Int = 0, restart: Bool = false) {
+        if restart && callLogLoading { callLogDirty = true; return }
+        callLogLoading = true
+        send(.callLogSync(CallLogSync(ofset: offset, adet: Self.callLogPageSize)), id: nextId())
+    }
+
+    private func applyContactsPage(_ page: ContactsPage) {
+        guard perm.kisiler else { return }
+        if page.ofset == 0 { contactBook = []; contacts.reset() }
+        guard page.ofset == contactBook.count else { contactsLoading = false; contactsDirty = false; return }   // sira disi sayfa
+        contactBook.append(contentsOf: page.kisiler)
+        contacts.sync(with: contactBook)
+        contactsTotal = page.toplam
+        if page.son || page.kisiler.isEmpty || contactBook.count >= page.toplam {
+            contactsLoaded = true; contactsLoading = false
+            if contactsDirty { contactsDirty = false; requestContacts(from: 0) }
+        } else {
+            requestContacts(from: contactBook.count)
+        }
+    }
+
+    private func applyCallLogPage(_ page: CallLogPage) {
+        guard perm.aramaGecmisi else { return }
+        var log = page.ofset == 0 ? [] : (callLog ?? [])
+        guard page.ofset == log.count else { callLogLoading = false; callLogDirty = false; return }
+        log.append(contentsOf: page.kayitlar)
+        callLog = log
+        if page.son || page.kayitlar.isEmpty || log.count >= Self.callLogLimit {
+            callLogLoaded = true; callLogLoading = false
+            if callLogDirty { callLogDirty = false; requestCallLog(from: 0) }
+        } else {
+            requestCallLog(from: log.count)
+        }
+    }
+
+    private func updateCallClock(old: CallState, new: CallState) {
+        guard new.durum == .acik else { callStartedAt = nil; return }
+        if let s = new.sureSn { callStartedAt = Date().addingTimeInterval(-TimeInterval(s)) }
+        else if old.durum != .acik || callStartedAt == nil { callStartedAt = Date() }
+    }
+
+    // Eylemler (izin yoksa telefon `izin_yok` doner; Mac hic gondermez).
+    func answer() { if perm.cagriYonetimi { send(.callAnswer, id: nextId()) } }
+    func reject() { if perm.cagriYonetimi { send(.callReject, id: nextId()) } }
+    func hangup() { if perm.cagriYonetimi { send(.callHangup, id: nextId()) } }
+
+    /// Yalniz tus karakterleri (0-9 + * #) gonderilir.
+    func dial(_ raw: String) {
+        let number = ContactText.dialable(raw)
+        guard perm.cagriYonetimi, !number.isEmpty else { return }
+        send(.callDial(numara: number), id: nextId())
+    }
+
+    func dismiss(_ key: String) { if perm.bildirimler { send(.notifDismiss(anahtar: key), id: nextId()) } }
+    func clearAll() { if perm.bildirimler { send(.notifClear, id: nextId()) } }
+
+    func reply(_ key: String, _ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard perm.bildirimler, !t.isEmpty else { return }
+        replyResults[key] = nil
+        repliedAt[key] = Date()
+        send(.notifReply(anahtar: key, metin: t), id: nextId())
     }
 
     // MARK: Gonderim

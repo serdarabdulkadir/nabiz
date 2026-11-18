@@ -36,6 +36,11 @@ object BackgroundAccess {
         launch(ctx, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
     }
 
+    /** Sistem "Bildirim erisimi" listesi (Mac ile paylas > Bildirimler). */
+    fun openNotificationListenerSettings(ctx: Context) {
+        if (!launch(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))) openAppDetails(ctx)
+    }
+
     /** Android 16+: uygulama canli guncelleme (promoted) gosteremiyorsa true. */
     fun livePromotionOff(ctx: Context): Boolean =
         Build.VERSION.SDK_INT >= 36 &&

@@ -67,7 +67,7 @@ class PeerMessageTest {
     }
 
     @Test fun unknownTypeAndBrokenJson() {
-        assertTrue(PeerCodec.decode("""{"t":"call.dial","id":2,"numara":"555"}""") is PeerMessage.Unknown)
+        assertTrue(PeerCodec.decode("""{"t":"gelecek.tip","id":2,"x":1}""") is PeerMessage.Unknown)
         try { PeerCodec.decode("{bozuk"); fail() } catch (_: PeerProtocolException) { }
         try { PeerCodec.decode("""{"t":"stats"}"""); fail() } catch (_: PeerProtocolException) { }
     }

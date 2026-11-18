@@ -42,8 +42,8 @@ private func json(_ e: PeerEnvelope) throws -> String { String(decoding: try Pee
 @Test func subAraligiSikistirilirVeBilinmeyenTip() throws {
     #expect(try PeerCodec.decode(Data(#"{"t":"sub","aralikSn":500}"#.utf8)).message == .sub(aralikSn: 60))
     #expect(try PeerCodec.decode(Data(#"{"t":"sub","aralikSn":0}"#.utf8)).message == .sub(aralikSn: 1))
-    #expect(throws: PeerMessageError.bilinmeyenTip("call.dial")) {
-        try PeerCodec.decode(Data(#"{"id":2,"numara":"555","t":"call.dial"}"#.utf8))
+    #expect(throws: PeerMessageError.bilinmeyenTip("xyz.bilinmeyen")) {
+        try PeerCodec.decode(Data(#"{"id":2,"t":"xyz.bilinmeyen"}"#.utf8))
     }
     #expect(throws: PeerMessageError.gecersizJSON) { try PeerCodec.decode(Data("%%".utf8)) }
     #expect(throws: PeerMessageError.gecersizJSON) { try PeerCodec.decode(Data(#"{"t":"cmd","eylem":"patlat"}"#.utf8)) }

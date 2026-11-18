@@ -383,6 +383,17 @@ private struct PhoneSettings: View {
                         subtitle: "Telefonda Nabız uygulamasını aç, aynı Wi-Fi ağında olduğundan emin ol.") { EmptyView() }
                 }
             }
+            SectionTitle(text: "Telefon bildirimleri ve aramalar")
+            Box {
+                ToggleRow(symbol: "bell", title: "Telefon bildirimlerini Mac'te göster",
+                          subtitle: "Telefondaki yeni bildirimler Mac'te de banner olarak çıkar.",
+                          key: SettingsKey.phoneNotifMac, defaultOn: true)
+                RowDivider()
+                ToggleRow(symbol: "phone.bubble", title: "Gelen aramada baloncuk göster",
+                          subtitle: "Arama sürerken ekranda yüzen küçük bir kart gösterilir.",
+                          key: SettingsKey.phoneCallBubble, defaultOn: true)
+            }
+            Footnote(text: "Bildirim, arama ve kişi paylaşımı telefonda Ayarlar > Mac ile paylaş bölümünden açılır.")
             SectionTitle(text: "Uzak bağlantı")
             RemoteAccessBox()
             SectionTitle(text: "Telefondan komutlar")

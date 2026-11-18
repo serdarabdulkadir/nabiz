@@ -68,6 +68,7 @@ class NabizClient(
     private val ownModel: String,
     private val appVersion: String,
     private val statsProvider: () -> Snapshot?,
+    private val host: PhoneHost? = null,
 ) {
     private val _state = MutableStateFlow(LinkState())
     val state: StateFlow<LinkState> = _state.asStateFlow()
@@ -90,6 +91,7 @@ class NabizClient(
     private var versionPeer: Int? = null
     private var localClose: CloseReason? = null
     @Volatile private var readyReached = false
+    @Volatile private var connScope: CoroutineScope? = null
 
     fun start(scope: CoroutineScope) {
         if (job != null) return
@@ -122,6 +124,9 @@ class NabizClient(
     fun sendStats(snap: Snapshot) = withSession { it.send(PeerMessage.Stats(snap)) }
 
     fun sendCmd(eylem: String) = withSession { it.send(PeerMessage.Cmd(eylem, nextId++)) }
+
+    /** Hazir oturumda herhangi bir mesaj yollar (telefon ozellikleri: bildirim, arama durumu...); oturum yoksa atilir. */
+    fun send(m: PeerMessage) = withSession { if (it.phase == PeerSession.Phase.READY) it.send(m) else emptyList() }
 
     fun sendPing() = withSession { it.send(PeerMessage.Ping(rtt.onSent(System.nanoTime()))) }
 
@@ -206,6 +211,7 @@ class NabizClient(
         val sock = Socket()
         val wr = Channel<ByteArray>(Channel.UNLIMITED)
         val scope = CoroutineScope(currentCoroutineContext())
+        connScope = scope
         var writerJob: Job? = null
         var pingJob: Job? = null
         try {
@@ -246,6 +252,7 @@ class NabizClient(
             android.util.Log.w("NabizLink", "baglanti hatasi", e)
             return reasonOf(localClose)
         } finally {
+            connScope = null
             pingJob?.cancel()
             writerJob?.cancel()
             closeSocket()
@@ -299,9 +306,40 @@ class NabizClient(
                 emit(s.send(PeerMessage.Sub(desiredSub)))
                 emit(s.send(PeerMessage.Ping(rtt.onSent(System.nanoTime()))))
                 statsProvider()?.let { emit(s.send(PeerMessage.Stats(it))) }
+                pushPhoneState()
             }
         }
         return closed
+    }
+
+    /** Oturum kurulunca: perm.state, call.state (bosta degilse), bildirimler aciksa notif.list. Kilit disinda (IO'da) hazirlanir. */
+    private fun pushPhoneState() {
+        val h = host ?: return
+        val sc = connScope ?: return
+        sc.launch(Dispatchers.IO) {
+            try {
+                h.onSessionStart()
+                send(h.permState())
+                h.callState().takeIf { it.durum != "bosta" }?.let { send(it) }
+                h.notifList()?.let { send(PeerMessage.NotifList(it)) }
+            } catch (e: Exception) {
+                android.util.Log.w("NabizLink", "telefon durumu yollanamadi", e)
+            }
+        }
+    }
+
+    /** mac->tel telefon istegi: kilit disinda islenir, yanitlar ayni oturumdan gider (izin yoksa host `izin_yok` doner). */
+    private fun dispatchToHost(m: PeerMessage) {
+        val h = host
+        val sc = connScope
+        if (h == null || sc == null) { session?.let { emit(it.send(PeerMessage.Err("bilinmeyen_tip", "telefon", m.id))) }; return }
+        sc.launch(Dispatchers.IO) {
+            val replies = try { h.handle(m) } catch (e: Exception) {
+                android.util.Log.w("NabizLink", "telefon istegi hatasi", e)
+                listOf(PeerMessage.Err("hata", "İşlem yapılamadı", m.id))
+            }
+            for (r in replies) send(r)
+        }
     }
 
     private fun emit(events: List<PeerEvent>) {
@@ -331,6 +369,13 @@ class NabizClient(
             is PeerMessage.Unknown -> emit(s.send(PeerMessage.Err("bilinmeyen_tip", m.type, m.id)))
             is PeerMessage.Pong -> rtt.onPong(m.id, System.nanoTime())?.let { ms -> _state.update { it.copy(rttMs = ms) } }
             is PeerMessage.Err -> {}
+            is PeerMessage.CallAnswer, is PeerMessage.CallReject, is PeerMessage.CallHangup, is PeerMessage.CallDial,
+            is PeerMessage.ContactsSync, is PeerMessage.CallLogSync,
+            is PeerMessage.NotifDismiss, is PeerMessage.NotifClear, is PeerMessage.NotifReply -> dispatchToHost(m)
+            // Telefondan Mac'e giden tipler: Mac yollamaz, yok sayilir.
+            is PeerMessage.PermState, is PeerMessage.CallState, is PeerMessage.ContactsPage, is PeerMessage.ContactsChanged,
+            is PeerMessage.CallLogPage, is PeerMessage.CallLogChanged, is PeerMessage.NotifList, is PeerMessage.NotifPosted,
+            is PeerMessage.NotifRemoved, is PeerMessage.NotifResult -> {}
         }
     }
 }

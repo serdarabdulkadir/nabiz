@@ -74,6 +74,7 @@ class NabizService : Service() {
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
         }
+        app.phone.start(scope)
         client.start(scope)
 
         // Mac karti: degisim yoksa guncelleme yok, en cok saniyede bir.
@@ -147,6 +148,7 @@ class NabizService : Service() {
     override fun onDestroy() {
         screenReceiver?.let { unregisterReceiver(it) }
         multicast?.let { if (it.isHeld) it.release() }
+        (application as NabizApp).phone.stop()
         client.stop()
         scope.cancel()
         super.onDestroy()

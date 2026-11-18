@@ -6,11 +6,13 @@ enum SettingsKey {
     static let cmdLock = "cmd.lock"         // varsayilan kapali
     static let cmdWake = "cmd.wake"         // varsayilan acik
     static let cmdSleep = "cmd.sleep"       // varsayilan kapali
+    static let phoneNotifMac = "phone.notifMac"     // telefon bildirimini Mac'te goster, varsayilan acik
+    static let phoneCallBubble = "phone.callBubble" // gelen aramada baloncuk, varsayilan acik
 }
 
 /// Panel bolumleri (Mac'e ozel ek olcumler); hepsi varsayilan acik.
 enum PanelModule: String, CaseIterable, Identifiable {
-    case history, processes, sensors, devices
+    case history, processes, sensors, devices, phoneNotifs, phoneCalls
     var id: String { rawValue }
     var key: String { "panel.\(rawValue)" }
     var title: String {
@@ -19,6 +21,8 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .processes: "Süreçler"
         case .sensors: "Sıcaklık ve fan"
         case .devices: "Bluetooth cihazları"
+        case .phoneNotifs: "Telefon bildirimleri"
+        case .phoneCalls: "Telefon aramaları"
         }
     }
     var detail: String {
@@ -27,6 +31,8 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .processes: "En çok CPU kullanan 5 süreç; yalnız panel açıkken ölçülür."
         case .sensors: "CPU sıcaklığı ve (varsa) fan hızı."
         case .devices: "Bağlı klavye, fare ve kulaklıkların pil yüzdesi."
+        case .phoneNotifs: "Telefon sekmesinde son bildirimler; telefonda izin açıksa."
+        case .phoneCalls: "Telefon sekmesinde son aramalar ve Ara düğmesi; telefonda izin açıksa."
         }
     }
     var symbol: String {
@@ -35,6 +41,8 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .processes: "list.number"
         case .sensors: "thermometer.medium"
         case .devices: "headphones"
+        case .phoneNotifs: "bell"
+        case .phoneCalls: "phone"
         }
     }
     var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }

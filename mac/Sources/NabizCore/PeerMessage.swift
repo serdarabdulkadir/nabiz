@@ -39,6 +39,24 @@ public enum PeerMessage: Equatable, Sendable {
     case macState(kilitli: Bool, ekranKapali: Bool, uykuyaGidiyor: Bool)
     case cmdResult(eylem: PeerCommand, sonuc: PeerCommandResult)
     case error(PeerError)
+    // Telefon: izinler, arama, kisiler, arama gecmisi, bildirimler (docs/protokol.md bolum 10).
+    case permState(PermState)
+    case callState(CallState)
+    case callAnswer, callReject, callHangup
+    case callDial(numara: String)
+    case contactsSync(ContactsSync)
+    case contactsPage(ContactsPage)
+    case contactsChanged
+    case callLogSync(CallLogSync)
+    case callLogPage(CallLogPage)
+    case callLogChanged
+    case notifList([PhoneNotification])
+    case notifPosted(PhoneNotification)
+    case notifRemoved(anahtar: String)
+    case notifDismiss(anahtar: String)
+    case notifClear
+    case notifReply(anahtar: String, metin: String)
+    case notifResult(anahtar: String, sonuc: NotifResult)
 
     public var type: String {
         switch self {
@@ -51,6 +69,25 @@ public enum PeerMessage: Equatable, Sendable {
         case .macState: "mac.state"
         case .cmdResult: "cmd.result"
         case .error: "error"
+        case .permState: "perm.state"
+        case .callState: "call.state"
+        case .callAnswer: "call.answer"
+        case .callReject: "call.reject"
+        case .callHangup: "call.hangup"
+        case .callDial: "call.dial"
+        case .contactsSync: "contacts.sync"
+        case .contactsPage: "contacts.page"
+        case .contactsChanged: "contacts.changed"
+        case .callLogSync: "calllog.sync"
+        case .callLogPage: "calllog.page"
+        case .callLogChanged: "calllog.changed"
+        case .notifList: "notif.list"
+        case .notifPosted: "notif.posted"
+        case .notifRemoved: "notif.removed"
+        case .notifDismiss: "notif.dismiss"
+        case .notifClear: "notif.clear"
+        case .notifReply: "notif.reply"
+        case .notifResult: "notif.result"
         }
     }
 }
@@ -62,7 +99,7 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
 
     public init(_ message: PeerMessage, id: Int? = nil) { self.message = message; self.id = id }
 
-    private enum Keys: String, CodingKey { case t, id, snap, aralikSn, eylem, sonuc, kilitli, ekranKapali, uykuyaGidiyor }
+    private enum Keys: String, CodingKey { case t, id, snap, aralikSn, eylem, sonuc, kilitli, ekranKapali, uykuyaGidiyor, numara, bildirimler, bildirim, anahtar, metin }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -85,6 +122,27 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
             message = .cmdResult(eylem: try c.decode(PeerCommand.self, forKey: .eylem),
                                  sonuc: try c.decode(PeerCommandResult.self, forKey: .sonuc))
         case "error": message = .error(try PeerError(from: decoder))
+        case "perm.state": message = .permState(try PermState(from: decoder))
+        case "call.state": message = .callState(try CallState(from: decoder))
+        case "call.answer": message = .callAnswer
+        case "call.reject": message = .callReject
+        case "call.hangup": message = .callHangup
+        case "call.dial": message = .callDial(numara: try c.decode(String.self, forKey: .numara))
+        case "contacts.sync": message = .contactsSync(try ContactsSync(from: decoder))
+        case "contacts.page": message = .contactsPage(try ContactsPage(from: decoder))
+        case "contacts.changed": message = .contactsChanged
+        case "calllog.sync": message = .callLogSync(try CallLogSync(from: decoder))
+        case "calllog.page": message = .callLogPage(try CallLogPage(from: decoder))
+        case "calllog.changed": message = .callLogChanged
+        case "notif.list": message = .notifList(try c.decode([PhoneNotification].self, forKey: .bildirimler))
+        case "notif.posted": message = .notifPosted(try c.decode(PhoneNotification.self, forKey: .bildirim))
+        case "notif.removed": message = .notifRemoved(anahtar: try c.decode(String.self, forKey: .anahtar))
+        case "notif.dismiss": message = .notifDismiss(anahtar: try c.decode(String.self, forKey: .anahtar))
+        case "notif.clear": message = .notifClear
+        case "notif.reply":
+            message = .notifReply(anahtar: try c.decode(String.self, forKey: .anahtar), metin: try c.decode(String.self, forKey: .metin))
+        case "notif.result":
+            message = .notifResult(anahtar: try c.decode(String.self, forKey: .anahtar), sonuc: try c.decode(NotifResult.self, forKey: .sonuc))
         default: throw PeerMessageError.bilinmeyenTip(t)
         }
     }
@@ -103,6 +161,19 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
             try c.encode(k, forKey: .kilitli); try c.encode(e, forKey: .ekranKapali); try c.encode(u, forKey: .uykuyaGidiyor)
         case .cmdResult(let e, let r): try c.encode(e, forKey: .eylem); try c.encode(r, forKey: .sonuc)
         case .error(let e): try e.encode(to: encoder)
+        case .permState(let p): try p.encode(to: encoder)
+        case .callState(let s): try s.encode(to: encoder)
+        case .callAnswer, .callReject, .callHangup, .contactsChanged, .callLogChanged, .notifClear: break
+        case .callDial(let n): try c.encode(n, forKey: .numara)
+        case .contactsSync(let v): try v.encode(to: encoder)
+        case .contactsPage(let v): try v.encode(to: encoder)
+        case .callLogSync(let v): try v.encode(to: encoder)
+        case .callLogPage(let v): try v.encode(to: encoder)
+        case .notifList(let l): try c.encode(l, forKey: .bildirimler)
+        case .notifPosted(let n): try c.encode(n, forKey: .bildirim)
+        case .notifRemoved(let a), .notifDismiss(let a): try c.encode(a, forKey: .anahtar)
+        case .notifReply(let a, let m): try c.encode(a, forKey: .anahtar); try c.encode(m, forKey: .metin)
+        case .notifResult(let a, let r): try c.encode(a, forKey: .anahtar); try c.encode(r, forKey: .sonuc)
         }
     }
 }

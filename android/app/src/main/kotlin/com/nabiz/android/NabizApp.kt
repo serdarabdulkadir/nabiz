@@ -21,8 +21,10 @@ class NabizApp : Application() {
         try { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.DEVICE_NAME) } catch (_: Exception) { null }
             ?.takeIf { it.isNotBlank() } ?: Build.MODEL
     }
-    val client by lazy {
+    /** Telefon ozellikleri (arama, kisi, bildirim); Mac'e `client` uzerinden yollar. */
+    val phone: com.nabiz.android.phone.PhoneFeatures by lazy { com.nabiz.android.phone.PhoneFeatures(this) { client.send(it) } }
+    val client: NabizClient by lazy {
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" } catch (_: Exception) { "0" }
-        NabizClient(store, MacDiscovery(this), deviceName, Build.MODEL, version) { sampler.sample() }
+        NabizClient(store, MacDiscovery(this), deviceName, Build.MODEL, version, { sampler.sample() }, phone)
     }
 }

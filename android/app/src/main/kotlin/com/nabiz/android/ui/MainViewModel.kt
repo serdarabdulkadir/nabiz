@@ -43,5 +43,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val alerts get() = nabiz.alerts
     fun testAlert() = com.nabiz.android.alerts.AlertNotifier.notifyTest(getApplication())
 
+    val shareFlags get() = nabiz.phone.share.flags
+    val systemGrants get() = nabiz.phone.systemGrants
+    fun setShare(key: com.nabiz.android.phone.ShareKey, on: Boolean) = nabiz.phone.setShare(key, on)
+    fun refreshShare() = nabiz.phone.refresh()
+
     fun unpair() = nabiz.client.unpair()
 }

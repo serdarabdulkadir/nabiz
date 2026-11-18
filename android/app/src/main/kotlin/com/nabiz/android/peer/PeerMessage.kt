@@ -24,6 +24,20 @@ data class Snapshot(
     val thermal: String? = null,
 )
 
+// docs/protokol.md bolum 10: telefon (arama, kisi, bildirim) mesaj yukleri.
+data class ContactNumber(val no: String, val tur: String)
+data class ContactRecord(
+    val kid: String, val ad: String, val numaralar: List<ContactNumber>, val favori: Boolean,
+    val gruplar: List<String> = emptyList(), val foto: String? = null,
+)
+data class CallLogEntry(val numara: String, val kisiAdi: String?, val yon: String, val zaman: Long, val sureSn: Int)
+
+/** Mac'e giden bildirim (bolum 10 "Bildirim" nesnesi). `ikon` base64 PNG (en cok 64 px, 6 KB). */
+data class PhoneNotif(
+    val anahtar: String, val paket: String, val uygulama: String, val baslik: String?, val metin: String?,
+    val zaman: Long, val yanitlanabilir: Boolean, val kapatilabilir: Boolean, val ikon: String? = null,
+)
+
 sealed class PeerMessage {
     abstract val id: Long?
 
@@ -42,6 +56,37 @@ sealed class PeerMessage {
     data class CmdResult(val eylem: String, val sonuc: String, override val id: Long? = null) : PeerMessage()
     data class Err(val kod: String, val mesaj: String = "", override val id: Long? = null) : PeerMessage()
     data class Unknown(val type: String, override val id: Long? = null) : PeerMessage()
+
+    // --- Bolum 10 ---
+    data class PermState(
+        val bildirimler: Boolean, val cagriYonetimi: Boolean, val kisiler: Boolean, val aramaGecmisi: Boolean,
+        override val id: Long? = null,
+    ) : PeerMessage()
+    data class CallState(
+        val durum: String, val yon: String? = null, val numara: String? = null, val kisiAdi: String? = null,
+        val sureSn: Int? = null, override val id: Long? = null,
+    ) : PeerMessage()
+    data class CallAnswer(override val id: Long? = null) : PeerMessage()
+    data class CallReject(override val id: Long? = null) : PeerMessage()
+    data class CallHangup(override val id: Long? = null) : PeerMessage()
+    data class CallDial(val numara: String, override val id: Long? = null) : PeerMessage()
+    data class ContactsSync(val ofset: Int, val adet: Int? = null, override val id: Long? = null) : PeerMessage()
+    data class ContactsPage(
+        val ofset: Int, val toplam: Int, val son: Boolean, val kisiler: List<ContactRecord>, override val id: Long? = null,
+    ) : PeerMessage()
+    data class ContactsChanged(override val id: Long? = null) : PeerMessage()
+    data class CallLogSync(val ofset: Int, val adet: Int? = null, override val id: Long? = null) : PeerMessage()
+    data class CallLogPage(
+        val ofset: Int, val toplam: Int, val son: Boolean, val kayitlar: List<CallLogEntry>, override val id: Long? = null,
+    ) : PeerMessage()
+    data class CallLogChanged(override val id: Long? = null) : PeerMessage()
+    data class NotifList(val bildirimler: List<PhoneNotif>, override val id: Long? = null) : PeerMessage()
+    data class NotifPosted(val bildirim: PhoneNotif, override val id: Long? = null) : PeerMessage()
+    data class NotifRemoved(val anahtar: String, override val id: Long? = null) : PeerMessage()
+    data class NotifDismiss(val anahtar: String, override val id: Long? = null) : PeerMessage()
+    data class NotifClear(override val id: Long? = null) : PeerMessage()
+    data class NotifReply(val anahtar: String, val metin: String, override val id: Long? = null) : PeerMessage()
+    data class NotifResult(val anahtar: String, val sonuc: String, override val id: Long? = null) : PeerMessage()
 }
 
 object PeerCodec {
@@ -69,6 +114,38 @@ object PeerCodec {
             is PeerMessage.CmdResult -> { out["t"] = "cmd.result"; out["eylem"] = m.eylem; out["sonuc"] = m.sonuc }
             is PeerMessage.Err -> { out["t"] = "error"; out["kod"] = m.kod; put("mesaj", m.mesaj.ifEmpty { null }) }
             is PeerMessage.Unknown -> out["t"] = m.type
+            is PeerMessage.PermState -> {
+                out["t"] = "perm.state"
+                out["bildirimler"] = m.bildirimler; out["cagriYonetimi"] = m.cagriYonetimi
+                out["kisiler"] = m.kisiler; out["aramaGecmisi"] = m.aramaGecmisi
+            }
+            is PeerMessage.CallState -> {
+                out["t"] = "call.state"; out["durum"] = m.durum
+                put("yon", m.yon); put("numara", m.numara); put("kisiAdi", m.kisiAdi); put("sureSn", m.sureSn)
+            }
+            is PeerMessage.CallAnswer -> out["t"] = "call.answer"
+            is PeerMessage.CallReject -> out["t"] = "call.reject"
+            is PeerMessage.CallHangup -> out["t"] = "call.hangup"
+            is PeerMessage.CallDial -> { out["t"] = "call.dial"; out["numara"] = m.numara }
+            is PeerMessage.ContactsSync -> { out["t"] = "contacts.sync"; out["ofset"] = m.ofset; put("adet", m.adet) }
+            is PeerMessage.ContactsPage -> {
+                out["t"] = "contacts.page"; out["ofset"] = m.ofset; out["toplam"] = m.toplam; out["son"] = m.son
+                out["kisiler"] = m.kisiler.map { PhoneCodec.contactMap(it) }
+            }
+            is PeerMessage.ContactsChanged -> out["t"] = "contacts.changed"
+            is PeerMessage.CallLogSync -> { out["t"] = "calllog.sync"; out["ofset"] = m.ofset; put("adet", m.adet) }
+            is PeerMessage.CallLogPage -> {
+                out["t"] = "calllog.page"; out["ofset"] = m.ofset; out["toplam"] = m.toplam; out["son"] = m.son
+                out["kayitlar"] = m.kayitlar.map { PhoneCodec.logMap(it) }
+            }
+            is PeerMessage.CallLogChanged -> out["t"] = "calllog.changed"
+            is PeerMessage.NotifList -> { out["t"] = "notif.list"; out["bildirimler"] = m.bildirimler.map { PhoneCodec.notifMap(it) } }
+            is PeerMessage.NotifPosted -> { out["t"] = "notif.posted"; out["bildirim"] = PhoneCodec.notifMap(m.bildirim) }
+            is PeerMessage.NotifRemoved -> { out["t"] = "notif.removed"; out["anahtar"] = m.anahtar }
+            is PeerMessage.NotifDismiss -> { out["t"] = "notif.dismiss"; out["anahtar"] = m.anahtar }
+            is PeerMessage.NotifClear -> out["t"] = "notif.clear"
+            is PeerMessage.NotifReply -> { out["t"] = "notif.reply"; out["anahtar"] = m.anahtar; out["metin"] = m.metin }
+            is PeerMessage.NotifResult -> { out["t"] = "notif.result"; out["anahtar"] = m.anahtar; out["sonuc"] = m.sonuc }
         }
         return out
     }
@@ -89,9 +166,78 @@ object PeerCodec {
             "mac.state" -> PeerMessage.MacState(o.boolOpt("kilitli"), o.boolOpt("ekranKapali"), o.boolOpt("uykuyaGidiyor"), id)
             "cmd.result" -> PeerMessage.CmdResult(o.str("eylem"), o.str("sonuc"), id)
             "error" -> PeerMessage.Err(o.str("kod"), o.strOpt("mesaj") ?: "", id)
+            "perm.state" -> PeerMessage.PermState(o.boolOpt("bildirimler"), o.boolOpt("cagriYonetimi"), o.boolOpt("kisiler"), o.boolOpt("aramaGecmisi"), id)
+            "call.state" -> PeerMessage.CallState(o.str("durum"), o.strOpt("yon"), o.strOpt("numara"), o.strOpt("kisiAdi"), o.intOpt("sureSn"), id)
+            "call.answer" -> PeerMessage.CallAnswer(id)
+            "call.reject" -> PeerMessage.CallReject(id)
+            "call.hangup" -> PeerMessage.CallHangup(id)
+            "call.dial" -> PeerMessage.CallDial(o.str("numara"), id)
+            "contacts.sync" -> PeerMessage.ContactsSync(o.int("ofset"), o.intOpt("adet"), id)
+            "contacts.page" -> PeerMessage.ContactsPage(
+                o.int("ofset"), o.int("toplam"), o.bool("son"),
+                o.listOpt("kisiler").orEmpty().map { PhoneCodec.contact(Fields(it as? Map<*, *> ?: throw PeerProtocolException("kisi nesne degil"))) }, id,
+            )
+            "contacts.changed" -> PeerMessage.ContactsChanged(id)
+            "calllog.sync" -> PeerMessage.CallLogSync(o.int("ofset"), o.intOpt("adet"), id)
+            "calllog.page" -> PeerMessage.CallLogPage(
+                o.int("ofset"), o.int("toplam"), o.bool("son"),
+                o.listOpt("kayitlar").orEmpty().map { PhoneCodec.log(Fields(it as? Map<*, *> ?: throw PeerProtocolException("kayit nesne degil"))) }, id,
+            )
+            "calllog.changed" -> PeerMessage.CallLogChanged(id)
+            "notif.list" -> PeerMessage.NotifList(
+                o.listOpt("bildirimler").orEmpty().map { PhoneCodec.notif(Fields(it as? Map<*, *> ?: throw PeerProtocolException("bildirim nesne degil"))) }, id,
+            )
+            "notif.posted" -> PeerMessage.NotifPosted(PhoneCodec.notif(Fields(o.map("bildirim"))), id)
+            "notif.removed" -> PeerMessage.NotifRemoved(o.str("anahtar"), id)
+            "notif.dismiss" -> PeerMessage.NotifDismiss(o.str("anahtar"), id)
+            "notif.clear" -> PeerMessage.NotifClear(id)
+            "notif.reply" -> PeerMessage.NotifReply(o.str("anahtar"), o.str("metin"), id)
+            "notif.result" -> PeerMessage.NotifResult(o.str("anahtar"), o.str("sonuc"), id)
             else -> PeerMessage.Unknown(t, id)
         }
     }
+}
+
+/** Bolum 10 ic nesneleri (kisi, arama kaydi, bildirim) <-> JSON haritasi. */
+internal object PhoneCodec {
+    fun contactMap(c: ContactRecord): Map<String, Any?> {
+        val m = hashMapOf<String, Any?>(
+            "kid" to c.kid, "ad" to c.ad, "favori" to c.favori, "gruplar" to c.gruplar,
+            "numaralar" to c.numaralar.map { mapOf("no" to it.no, "tur" to it.tur) },
+        )
+        c.foto?.let { m["foto"] = it }
+        return m
+    }
+
+    fun contact(f: Fields) = ContactRecord(
+        f.str("kid"), f.str("ad"),
+        f.listOpt("numaralar").orEmpty().map { n -> Fields(n as? Map<*, *> ?: throw PeerProtocolException("numara nesne degil")).let { ContactNumber(it.str("no"), it.str("tur")) } },
+        f.boolOpt("favori"), f.listOpt("gruplar").orEmpty().mapNotNull { it as? String }, f.strOpt("foto"),
+    )
+
+    fun logMap(e: CallLogEntry): Map<String, Any?> {
+        val m = hashMapOf<String, Any?>("numara" to e.numara, "yon" to e.yon, "zaman" to e.zaman, "sureSn" to e.sureSn)
+        e.kisiAdi?.let { m["kisiAdi"] = it }
+        return m
+    }
+
+    fun log(f: Fields) = CallLogEntry(f.str("numara"), f.strOpt("kisiAdi"), f.str("yon"), f.long("zaman"), f.int("sureSn"))
+
+    fun notifMap(n: PhoneNotif): Map<String, Any?> {
+        val m = hashMapOf<String, Any?>(
+            "anahtar" to n.anahtar, "paket" to n.paket, "uygulama" to n.uygulama, "zaman" to n.zaman,
+            "yanitlanabilir" to n.yanitlanabilir, "kapatilabilir" to n.kapatilabilir,
+        )
+        n.baslik?.let { m["baslik"] = it }
+        n.metin?.let { m["metin"] = it }
+        n.ikon?.let { m["ikon"] = it }
+        return m
+    }
+
+    fun notif(f: Fields) = PhoneNotif(
+        f.str("anahtar"), f.str("paket"), f.str("uygulama"), f.strOpt("baslik"), f.strOpt("metin"),
+        f.long("zaman"), f.boolOpt("yanitlanabilir"), f.boolOpt("kapatilabilir"), f.strOpt("ikon"),
+    )
 }
 
 object SnapshotCodec {

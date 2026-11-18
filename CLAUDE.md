@@ -25,7 +25,7 @@ Kaynak: `docs/tasarim.md`. Mac tarafı ORBIO (`~/Library/bt-ekosistem`) menü pa
 ## Kurallar
 - Uydurma metrik yok: okunamayan değer `--` gösterilir. Android 8+ CPU kullanımını vermez; Android'de CPU kartı yoktur.
 - Varsayılan güncelleme: panel/ekran açıkken 2 sn, kapalıyken 10 sn. Bildirim saniyede 1'den sık güncellenmez.
-- Telefon tarafında hassas izin yok; yalnız bildirim ve yerel ağ izinleri.
+- Telefon tarafında hassas izinler (bildirim erişimi, arama yönetimi, kişiler, arama geçmişi) yalnız "Mac ile paylaş" anahtarlarıyla ve **varsayılan KAPALI** istenir (2026-11-19, ORBIO modeli). Mac bu verileri diske yazmaz. Ayrıntı: `docs/protokol.md` bölüm 10.
 - Commit / push / yayın yalnız kullanıcı onayıyla. Sır (anahtar, token) repoya girmez; eşleşme anahtarı Keychain / Android Keystore'da.
 
 ## Ekip ve akış
