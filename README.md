@@ -6,7 +6,7 @@
 
 **Your Mac and your Android phone, on each other's screen.**
 
-A native macOS menu bar app and an Android companion. See each other's CPU, memory, storage, battery and network live — and handle your phone's **calls and notifications** right from the Mac.
+A native macOS menu bar app and an Android companion. See each other's CPU, memory, storage, battery and network live, handle your phone's **calls and notifications** from the Mac, and keep an eye on your **Claude, Codex and Cursor limits** on both.
 Local network only. No cloud, no account, end‑to‑end encrypted.
 
 [English](#english) · [Türkçe](#türkçe)
@@ -49,6 +49,7 @@ Open Nabız on both devices on the same Wi‑Fi and confirm the 6‑digit code. 
 | **The other device** | *Phone* tab in the menu bar panel | Mac card as a **Live Update** notification (Android 16 `ProgressStyle`; status bar chip / Xiaomi HyperOS *Super Island*) |
 | **Calls** *(new in 0.4)* | Floating call bubble: answer, decline, hang up, live timer. Recent & missed calls, contacts, dial pad — click any number to call from the phone | Shares call state, contacts and call history — only if you turn it on |
 | **Notifications** *(new in 0.4)* | Phone notifications in the panel, in a Phone window and as macOS banners. **Reply** inline or from the banner, dismiss one, or clear all | Shares notifications — only if you turn it on |
+| **AI limits** *(new in 0.5)* | Claude, Codex and Cursor usage: 5‑hour and weekly limits, "full in 33 min at this pace", alerts at 75 % / 90 % and on reset, several accounts per tool, an **AI** column and 4 icon styles in the menu bar | The same cards in an **AI** tab (only percentages travel to the phone, never tokens) |
 | **Remote actions** | — | Refresh, lock screen, sleep, wake display; Quick Settings tile |
 | **Alerts** | Battery, charging, storage, CPU, memory, thermal and connection alerts with per‑device thresholds, hysteresis and cool‑down | Same alert engine, shown on the phone |
 | **Look** | SwiftUI `MenuBarExtra`, Liquid Glass on macOS 26 (material fallback on 15), 6 menu bar styles | Jetpack Compose, light + dark, 5 notification designs |
@@ -125,6 +126,17 @@ Put both devices on the same [Tailscale](https://tailscale.com) network and ente
 
 Full wire format and test vectors: [`docs/protokol.md`](docs/protokol.md). Both apps' tests read the shared examples in [`docs/fixtures/`](docs/fixtures).
 
+### AI limits
+
+Based on [AI Limit Tracker](https://github.com/bahadirnuroglu/ai_limit_tracker) by Bahadır Nuroğlu (MIT, used with permission — see [`mac/THIRD_PARTY.md`](mac/THIRD_PARTY.md)).
+
+1. On the Mac: **Settings → AI**. Turn on Claude, Codex or Cursor.
+2. If you already use Claude Code / Codex CLI / Cursor on this Mac, Nabız reads their existing session — nothing else to do. macOS may ask once for your password to read Claude Code's session: choose **Always Allow**.
+3. Not signed in? **Giriş yap** starts the tool's own sign‑in in your browser. Another account (work / personal)? **Hesap ekle** opens a sign‑in window with its own separate cookie store.
+4. Pick a menu bar style in **Settings → Menu Bar → AI simgesi**.
+
+Nabız never stores or refreshes these tokens and doesn't use any tool's OAuth client id; it only reads what the tools themselves saved. It reads undocumented usage endpoints, so a provider change can break it.
+
 ### Privacy
 
 - No servers, no accounts, no analytics. Data only travels between your own two paired devices, encrypted.
@@ -198,6 +210,7 @@ Run `swift test` and `./gradlew testDebugUnitTest` before opening a PR. A wire�
 - **Android:** telefonun kendi durumu ve Mac kartı. Kart, kalıcı canlı bildirimdir (Android 16 Live Update, HyperOS'ta Super Island). Karttan ya da Hızlı Ayarlar kutucuğundan yenile, kilitle, uyut, ekranı uyandır.
 - **Aramalar (0.4'te yeni):** gelen aramada Mac'te yüzen baloncuk çıkar; Yanıtla, Reddet, Bitir ve süre sayacı vardır. Son ve cevapsız aramalar, kişiler ve tuş takımı da Mac'te. Bir numaraya tıklayınca arama telefondan başlar.
 - **Bildirimler (0.4'te yeni):** telefon bildirimleri panelde, Telefon penceresinde ve macOS bildirimi olarak görünür. Satır içinden ya da bildirimden **yanıt verebilir**, tek tek kapatabilir ya da tümünü kapatabilirsin.
+- **AI limitleri (0.5'te yeni):** Claude, Codex ve Cursor için 5 saatlik ve haftalık limitler, "bu hızla 33 dakikada tükenir" tahmini, %75/%90 ve sıfırlanma bildirimleri, araç başına birden çok hesap, menü çubuğunda AI sütunu ve 4 simge stili. Telefonda **AI** sekmesi. Mac'te **Ayarlar → AI**'dan açılır. [Bahadır Nuroğlu'nun AI Limit Tracker](https://github.com/bahadirnuroglu/ai_limit_tracker)'ından uyarlandı (MIT, izinli). Token'lar saklanmaz, telefona yalnız yüzdeler gider.
 - **Uyarılar:** pil, şarj, depolama, CPU, bellek, ısınma ve bağlantı için cihaz başına eşik.
 
 Uydurma değer yoktur: okunamayan her şey `--` görünür. Android 8 ve sonrası CPU kullanımını vermediği için telefonda CPU karosu yoktur.
