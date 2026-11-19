@@ -8,11 +8,16 @@ enum SettingsKey {
     static let cmdSleep = "cmd.sleep"       // varsayilan kapali
     static let phoneNotifMac = "phone.notifMac"     // telefon bildirimini Mac'te goster, varsayilan acik
     static let phoneCallBubble = "phone.callBubble" // gelen aramada baloncuk, varsayilan acik
+    static let aiEnabled = "ai.enabledProviders"    // acik AI saglayicilari (yoksa bu Mac'te bulunanlar)
+    static let aiNotify75 = "ai.notify75"           // varsayilan acik
+    static let aiNotify90 = "ai.notify90"           // varsayilan acik
+    static let aiNotifyReset = "ai.notifyReset"     // varsayilan acik
+    static let aiShowOnPhone = "ai.showOnPhone"     // AI limitlerini telefonda goster, varsayilan acik
 }
 
 /// Panel bolumleri (Mac'e ozel ek olcumler); hepsi varsayilan acik.
 enum PanelModule: String, CaseIterable, Identifiable {
-    case history, processes, sensors, devices, phoneNotifs, phoneCalls
+    case history, processes, sensors, devices, phoneNotifs, phoneCalls, ai
     var id: String { rawValue }
     var key: String { "panel.\(rawValue)" }
     var title: String {
@@ -23,6 +28,7 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .devices: "Bluetooth cihazları"
         case .phoneNotifs: "Telefon bildirimleri"
         case .phoneCalls: "Telefon aramaları"
+        case .ai: "AI limitleri"
         }
     }
     var detail: String {
@@ -33,6 +39,7 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .devices: "Bağlı klavye, fare ve kulaklıkların pil yüzdesi."
         case .phoneNotifs: "Telefon sekmesinde son bildirimler; telefonda izin açıksa."
         case .phoneCalls: "Telefon sekmesinde son aramalar ve Ara düğmesi; telefonda izin açıksa."
+        case .ai: "Panelde AI sekmesi: Claude, Codex ve Cursor kullanım limitleri (en az bir sağlayıcı açıksa)."
         }
     }
     var symbol: String {
@@ -43,13 +50,14 @@ enum PanelModule: String, CaseIterable, Identifiable {
         case .devices: "headphones"
         case .phoneNotifs: "bell"
         case .phoneCalls: "phone"
+        case .ai: "gauge.with.dots.needle.50percent"
         }
     }
     var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
 }
 
 enum BarModule: String, CaseIterable, Identifiable {
-    case cpu, ram, disk, battery, network, gpu, phone
+    case cpu, ram, disk, battery, network, gpu, phone, ai
     var id: String { rawValue }
     var key: String { "bar.\(rawValue)" }
     var title: String {
@@ -61,15 +69,17 @@ enum BarModule: String, CaseIterable, Identifiable {
         case .network: "Ağ"
         case .gpu: "GPU"
         case .phone: "Telefon pili"
+        case .ai: "AI"
         }
     }
-    var defaultOn: Bool { self == .cpu || self == .ram }
+    var defaultOn: Bool { self == .cpu || self == .ram || self == .ai }
 }
 
 enum MenuBarKey {
     static let style = "menubar.style"
     static let showPercent = "menubar.showPercent"   // varsayilan acik
     static let critical = "menubar.critical"         // varsayilan acik
+    static let aiStyle = "ai.barStyle"               // AIBarStyle, varsayilan column
 }
 
 /// Menu cubugu gorunumu. Ham deger @AppStorage "menubar.style" anahtarinda saklanir.
@@ -108,6 +118,7 @@ extension BarModule {
         case .network: "arrow.up.arrow.down"
         case .gpu: "display"
         case .phone: "smartphone"
+        case .ai: "gauge.with.dots.needle.50percent"
         }
     }
     var detail: String {
@@ -119,6 +130,7 @@ extension BarModule {
         case .network: "İndirme ve yükleme hızı."
         case .gpu: "Grafik işlemci kullanımı."
         case .phone: "Eşleşmiş telefonun pil yüzdesi."
+        case .ai: "AI limitleri; stil ve seçilen hesap Menü Çubuğu sekmesinde. En az bir sağlayıcı bağlıysa görünür."
         }
     }
 }

@@ -12,6 +12,8 @@ struct BarPrefs: DynamicProperty {
     @AppStorage(BarModule.network.key) private var network = false
     @AppStorage(BarModule.gpu.key) private var gpu = false
     @AppStorage(BarModule.phone.key) private var phone = false
+    @AppStorage(BarModule.ai.key) private var ai = true
+    @AppStorage(MenuBarKey.aiStyle) var aiStyle: AIBarStyle = .column
     @AppStorage(MenuBarKey.style) var style: MenuBarStyle = .metin
     @AppStorage(MenuBarKey.showPercent) var showPercent = true
     @AppStorage(MenuBarKey.critical) var criticalRed = true
@@ -25,6 +27,7 @@ struct BarPrefs: DynamicProperty {
         case .network: network
         case .gpu: gpu
         case .phone: phone
+        case .ai: ai
         }
     }
 }
@@ -46,24 +49,35 @@ struct BarState {
     var style: MenuBarStyle
     var showPercent: Bool
     var history: [Int]
-    var hasCritical: Bool { items.contains { $0.critical } }
+    /// AI simgesi (sütun stili dışındaki stiller): menü çubuğu öğesinin sonuna çizilir.
+    var aiEntries: [AIMenuIcon.Entry] = []
+    var aiStyle: AIBarStyle = .column
+    var hasCritical: Bool { items.contains { $0.critical } || aiEntries.contains { ($0.percent ?? 0) >= 90 } }
 
     /// Yeniden cizim anahtari: degismediyse onceki NSImage yeniden kullanilir.
     var key: String {
         var k = "\(style.rawValue)|\(showPercent)|" + items.map(\.key).joined(separator: ",")
+        if !aiEntries.isEmpty { k += "|ai:\(aiStyle.rawValue):" + aiEntries.map(\.key).joined(separator: ",") }
         if style == .grafik, items.contains(where: { $0.module == .cpu }) {
             k += "|" + history.map(String.init).joined(separator: ",")
         }
         return k
     }
 
+    @MainActor
     static func make(prefs: BarPrefs, style: MenuBarStyle? = nil, snapshot s: Snapshot?, phone: Snapshot?, history: [Int]) -> BarState {
-        BarState(items: items(prefs: prefs, snapshot: s, phone: phone), style: style ?? prefs.style,
-                 showPercent: prefs.showPercent, history: history)
+        var st = BarState(items: items(prefs: prefs, snapshot: s, phone: phone), style: style ?? prefs.style,
+                          showPercent: prefs.showPercent, history: history)
+        if prefs.isOn(.ai), prefs.aiStyle != .column {
+            st.aiEntries = AIStore.shared.menuEntries(style: prefs.aiStyle)
+            st.aiStyle = prefs.aiStyle
+        }
+        return st
     }
 
     private static func frac(_ used: UInt64, _ total: UInt64) -> Double { total > 0 ? Double(used) / Double(total) : 0 }
 
+    @MainActor
     static func items(prefs: BarPrefs, snapshot s: Snapshot?, phone: Snapshot?) -> [BarItem] {
         let red = prefs.criticalRed
         var out: [BarItem] = []
@@ -104,6 +118,12 @@ struct BarState {
                 let v = s?.gpu
                 out.append(BarItem(module: m, label: "GPU", letter: "G", fraction: v.map { Double($0) / 100 },
                                    value: Format.percent(v), critical: false, excess: 0))
+            case .ai:
+                // Yalnız "sütun" stilinde; diğer stiller simge olarak sona çizilir (make). Veri yoksa görünmez.
+                guard prefs.aiStyle == .column, let v = AIStore.shared.barPercent else { continue }
+                let c = red && v >= 90
+                out.append(BarItem(module: m, label: "AI", letter: "AI", fraction: v / 100, value: Format.percent(Int(v.rounded())),
+                                   critical: c, excess: c ? v / 90 : 0))
             case .phone:
                 guard let b = phone?.battery else { continue }
                 let c = red && b.level <= 20 && !b.charging
@@ -121,9 +141,14 @@ struct MenuBarArt: View {
     let alert: Color
 
     var body: some View {
-        content
-            .frame(height: 22)
-            .fixedSize()
+        HStack(spacing: 6) {
+            if !state.items.isEmpty || state.aiEntries.isEmpty { content }
+            if !state.aiEntries.isEmpty {
+                Image(nsImage: AIMenuIcon.image(state.aiEntries, style: state.aiStyle, label: NSColor(ink)))
+            }
+        }
+        .frame(height: 22)
+        .fixedSize()
     }
 
     @ViewBuilder

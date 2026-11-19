@@ -57,6 +57,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
     val phone by vm.phone.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
     val found by vm.found.collectAsStateWithLifecycle()
+    val ai by vm.ai.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settings by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -70,6 +71,8 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
     LaunchedEffect(requestedTab) {
         if (requestedTab in 0..1) { tab = requestedTab; settings = false; onTabHandled() }
     }
+    // AI sekmesi yalniz son ai.state'te saglayici varken var; yoksa Mac'e donulur.
+    LaunchedEffect(ai.isNotEmpty()) { if (ai.isEmpty() && tab == 2) tab = 1 }
     BackHandler(enabled = settings) { settings = false }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.nabiz.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -98,7 +101,10 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                                 modifier = Modifier.pressable { settings = true }.padding(horizontal = Space.md, vertical = Space.sm),
                             )
                         }
-                        Segmented(listOf("Telefon", "Mac" + (link.rttMs?.takeIf { link.phase == LinkPhase.READY }?.let { " · $it ms" } ?: "")), tab, { tab = it })
+                        Segmented(
+                            listOf("Telefon", "Mac" + (link.rttMs?.takeIf { link.phase == LinkPhase.READY }?.let { " · $it ms" } ?: "")) + (if (ai.isNotEmpty()) listOf("AI") else emptyList()),
+                            tab.coerceAtMost(if (ai.isNotEmpty()) 2 else 1), { tab = it },
+                        )
                     }
                     Column(
                         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.lg),
@@ -116,7 +122,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                             label = "tab",
                         ) { t ->
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                                if (t == 0) PhoneTab(phone, vm.history) else MacTab(link, vm::sendCmd, vm.history, found, pinned?.id, vm::connectTo, vm::rescan)
+                                if (t == 0) PhoneTab(phone, vm.history) else if (t == 2 && ai.isNotEmpty()) AiTab(ai) else MacTab(link, vm::sendCmd, vm.history, found, pinned?.id, vm::connectTo, vm::rescan)
                             }
                         }
                         Spacer(Modifier.height(Space.xl))

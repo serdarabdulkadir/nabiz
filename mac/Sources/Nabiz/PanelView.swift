@@ -5,11 +5,17 @@ import NabizCore
 private enum PanelTab: String, CaseIterable {
     case mac = "Bu Mac"
     case phone = "Telefon"
+    case ai = "AI"
 }
 
 struct PanelView: View {
     var model: MonitorModel
     @State private var tab: PanelTab = .mac
+    private var ai = AIStore.shared
+
+    /// AI sekmesi yalniz modul acik ve en az bir saglayici aciksa gorunur.
+    private var showAI: Bool { PanelModule.ai.isOn && ai.hasEnabled }
+    private var tabs: [PanelTab] { showAI ? PanelTab.allCases : [.mac, .phone] }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -20,8 +26,11 @@ struct PanelView: View {
                     if tab == .mac {
                         MacTab(snapshot: model.snapshot, model: model)
                             .transition(.directional(forward: false))
-                    } else {
+                    } else if tab == .phone || !showAI {
                         PhoneTab(phone: PhoneModel.shared)
+                            .transition(.directional(forward: true))
+                    } else {
+                        AITab()
                             .transition(.directional(forward: true))
                     }
                 }
@@ -32,12 +41,12 @@ struct PanelView: View {
         .padding(12)
         .frame(width: 344)
         .panelChrome()
-        .onAppear { model.panelOpen = true }
+        .onAppear { model.panelOpen = true; AIStore.shared.refreshIfStale() }
         .onDisappear { model.panelOpen = false }
     }
 
     private var picker: some View {
-        SlidingPillPicker(options: PanelTab.allCases, selection: tab, title: \.rawValue) { tab = $0 }
+        SlidingPillPicker(options: tabs, selection: tab, title: \.rawValue) { tab = $0 }
     }
 
     private var footer: some View {

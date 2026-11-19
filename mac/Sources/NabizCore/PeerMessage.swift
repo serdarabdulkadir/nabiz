@@ -57,6 +57,7 @@ public enum PeerMessage: Equatable, Sendable {
     case notifClear
     case notifReply(anahtar: String, metin: String)
     case notifResult(anahtar: String, sonuc: NotifResult)
+    case aiState([AIWireProvider])
 
     public var type: String {
         switch self {
@@ -88,6 +89,7 @@ public enum PeerMessage: Equatable, Sendable {
         case .notifClear: "notif.clear"
         case .notifReply: "notif.reply"
         case .notifResult: "notif.result"
+        case .aiState: "ai.state"
         }
     }
 }
@@ -99,7 +101,7 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
 
     public init(_ message: PeerMessage, id: Int? = nil) { self.message = message; self.id = id }
 
-    private enum Keys: String, CodingKey { case t, id, snap, aralikSn, eylem, sonuc, kilitli, ekranKapali, uykuyaGidiyor, numara, bildirimler, bildirim, anahtar, metin }
+    private enum Keys: String, CodingKey { case t, id, snap, aralikSn, eylem, sonuc, kilitli, ekranKapali, uykuyaGidiyor, numara, bildirimler, bildirim, anahtar, metin, saglayicilar }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -141,6 +143,7 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
         case "notif.clear": message = .notifClear
         case "notif.reply":
             message = .notifReply(anahtar: try c.decode(String.self, forKey: .anahtar), metin: try c.decode(String.self, forKey: .metin))
+        case "ai.state": message = .aiState(try c.decode([AIWireProvider].self, forKey: .saglayicilar))
         case "notif.result":
             message = .notifResult(anahtar: try c.decode(String.self, forKey: .anahtar), sonuc: try c.decode(NotifResult.self, forKey: .sonuc))
         default: throw PeerMessageError.bilinmeyenTip(t)
@@ -174,6 +177,7 @@ public struct PeerEnvelope: Codable, Equatable, Sendable {
         case .notifRemoved(let a), .notifDismiss(let a): try c.encode(a, forKey: .anahtar)
         case .notifReply(let a, let m): try c.encode(a, forKey: .anahtar); try c.encode(m, forKey: .metin)
         case .notifResult(let a, let r): try c.encode(a, forKey: .anahtar); try c.encode(r, forKey: .sonuc)
+        case .aiState(let l): try c.encode(l, forKey: .saglayicilar)
         }
     }
 }

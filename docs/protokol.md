@@ -194,3 +194,19 @@ Sorun: ilk baglanti yavas (saniyeler), RTT ~500 ms (ping 3 ms iken), telefon hot
 - **Bulunan Mac listesi:** telefon NSD + UDP + son adres sonuclarini `id` ile birlestirir (kaynak ve son gorulme zamaniyla); kesif yeniden baslasa da liste silinmez, 60 sn gorulmeyen dusurulur.
 - **Mac tek oturum kurali:** yeni baglanti eski oturumu hemen DUSURMEZ. Yeni baglanti el sikismaya alinir (en cok 1 aday); `hs.pub` sabitlenmis telefon anahtarina esitse (ya da hic eslesme yoksa ve SAS onaylanirsa) eski oturum kapatilir, aday aktif olur. Aday 10 sn icinde dogrulanmazsa kapatilir. Reddedilen baglanti HEMEN kapatilir (beklemede birakilmaz).
 - **Yeniden deneme:** geri cekilme 1/2/5/10/30 sn; ag degisince (ConnectivityManager / hotspot istemcisi degisimi) geri cekilme sifirlanir ve hemen denenir.
+
+## 12. AI limitleri (2026-11-19)
+
+Kaynak: Bahadir Nuroglu'nun AI Limit Tracker'i (MIT, izinli; `~/Downloads/ai_limit_tracker-main`, YALNIZ OKUNUR). Veri Mac'te okunur (Claude: Claude Code oturumu / claude.ai web oturumu; Codex: `~/.codex/auth.json`; Cursor: Cursor uygulamasi). Telefon yalniz gosterir. Token'lar Mac'ten CIKMAZ.
+
+| `t` | Yon | Alanlar |
+|---|---|---|
+| `ai.state` | mac->tel | `saglayicilar`: `[Saglayici]` (bos dizi = AI kapali ya da hicbiri bagli degil) |
+
+**Saglayici:** `id` (`claude`/`codex`/`cursor`), `hesapId` (hesap basina benzersiz; yerel hesapta saglayici adi, ek hesapta UUID), `hesap?` (kullanicinin verdigi hesap adi; tek hesapta yok), `ad`, `plan?`, `not?` (or. Cursor "$15,60 / $20"), `sorun?` (veri alinamadiysa kisa metin), `guncel?` (son basarili okuma, epoch sn), `limitler`: `[Limit]`.
+**Limit:** `id`, `ad` (or. "5 saat", "Haftalik", "Opus"), `yuzde` (0-100 tam sayi), `sifirlanma?` (epoch sn), `genel` (bool: model==nil; on yuzde yalniz genel limitler + %90+ olanlar), `tukenme?` (bu hizla dolmasina kalan sn).
+
+- Mac `ai.state`i oturum kurulunca bir kez ve veri degisince yollar (en sik 10 sn'de bir). Mac Ayarlar > AI > "Telefonda goster" (varsayilan ACIK) kapaliysa bos dizi yollar.
+- Ornekler `docs/fixtures/messages.json` icinde `ai-state`, `ai-state-bos`.
+- **Coklu hesap:** her hesap `saglayicilar` icinde AYRI bir oge (ayni `id`, farkli `hesapId`). Ek hesaplar web girisiyle eklenir (her hesap ayri `WKWebsiteDataStore(forIdentifier:)` cerez kutusu). Nabiz hicbir aracin OAuth client id'sini KULLANMAZ ve token yenilemez: yerel hesap aracin kendi kaydindan okunur (Claude Code Anahtar Zinciri, `~/.codex/auth.json`, Cursor), oturum duserse "Giris yap" aracin kendi girisini (`claude auth login`, `codex login`) baslatir ya da web girisini acar.
+

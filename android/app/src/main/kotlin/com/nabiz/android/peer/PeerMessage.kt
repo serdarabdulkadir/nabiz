@@ -38,6 +38,17 @@ data class PhoneNotif(
     val zaman: Long, val yanitlanabilir: Boolean, val kapatilabilir: Boolean, val ikon: String? = null,
 )
 
+// docs/protokol.md bolum 12: AI limitleri (Mac'ten gelir, telefon yalniz gosterir).
+data class AiLimit(
+    val id: String, val ad: String, val yuzde: Int, val sifirlanma: Long? = null, val genel: Boolean = false, val tukenme: Long? = null,
+)
+data class AiProvider(
+    val id: String, val ad: String, val plan: String? = null, val notu: String? = null, val sorun: String? = null,
+    val guncel: Long? = null, val limitler: List<AiLimit> = emptyList(),
+    /** Hesap basina benzersiz (yerel hesapta saglayici adi, ek hesapta UUID); `hesap`: kullanicinin verdigi ad. */
+    val hesapId: String = id, val hesap: String? = null,
+)
+
 sealed class PeerMessage {
     abstract val id: Long?
 
@@ -87,6 +98,7 @@ sealed class PeerMessage {
     data class NotifClear(override val id: Long? = null) : PeerMessage()
     data class NotifReply(val anahtar: String, val metin: String, override val id: Long? = null) : PeerMessage()
     data class NotifResult(val anahtar: String, val sonuc: String, override val id: Long? = null) : PeerMessage()
+    data class AiState(val saglayicilar: List<AiProvider>, override val id: Long? = null) : PeerMessage()
 }
 
 object PeerCodec {
@@ -146,6 +158,7 @@ object PeerCodec {
             is PeerMessage.NotifClear -> out["t"] = "notif.clear"
             is PeerMessage.NotifReply -> { out["t"] = "notif.reply"; out["anahtar"] = m.anahtar; out["metin"] = m.metin }
             is PeerMessage.NotifResult -> { out["t"] = "notif.result"; out["anahtar"] = m.anahtar; out["sonuc"] = m.sonuc }
+            is PeerMessage.AiState -> { out["t"] = "ai.state"; out["saglayicilar"] = m.saglayicilar.map { PhoneCodec.aiMap(it) } }
         }
         return out
     }
@@ -193,6 +206,9 @@ object PeerCodec {
             "notif.clear" -> PeerMessage.NotifClear(id)
             "notif.reply" -> PeerMessage.NotifReply(o.str("anahtar"), o.str("metin"), id)
             "notif.result" -> PeerMessage.NotifResult(o.str("anahtar"), o.str("sonuc"), id)
+            "ai.state" -> PeerMessage.AiState(
+                o.listOpt("saglayicilar").orEmpty().map { PhoneCodec.ai(Fields(it as? Map<*, *> ?: throw PeerProtocolException("saglayici nesne degil"))) }, id,
+            )
             else -> PeerMessage.Unknown(t, id)
         }
     }
@@ -233,6 +249,34 @@ internal object PhoneCodec {
         n.ikon?.let { m["ikon"] = it }
         return m
     }
+
+    fun aiMap(p: AiProvider): Map<String, Any?> {
+        val m = hashMapOf<String, Any?>(
+            "id" to p.id, "ad" to p.ad, "hesapId" to p.hesapId,
+            "limitler" to p.limitler.map { l ->
+                val x = hashMapOf<String, Any?>("id" to l.id, "ad" to l.ad, "yuzde" to l.yuzde, "genel" to l.genel)
+                l.sifirlanma?.let { x["sifirlanma"] = it }
+                l.tukenme?.let { x["tukenme"] = it }
+                x
+            },
+        )
+        p.hesap?.let { m["hesap"] = it }
+        p.plan?.let { m["plan"] = it }
+        p.notu?.let { m["not"] = it }
+        p.sorun?.let { m["sorun"] = it }
+        p.guncel?.let { m["guncel"] = it }
+        return m
+    }
+
+    fun ai(f: Fields) = AiProvider(
+        f.str("id"), f.str("ad"), f.strOpt("plan"), f.strOpt("not"), f.strOpt("sorun"), f.longOpt("guncel"),
+        f.listOpt("limitler").orEmpty().map { l ->
+            Fields(l as? Map<*, *> ?: throw PeerProtocolException("limit nesne degil")).let {
+                AiLimit(it.str("id"), it.str("ad"), it.int("yuzde"), it.longOpt("sifirlanma"), it.boolOpt("genel"), it.longOpt("tukenme"))
+            }
+        },
+        f.strOpt("hesapId") ?: f.str("id"), f.strOpt("hesap"),
+    )
 
     fun notif(f: Fields) = PhoneNotif(
         f.str("anahtar"), f.str("paket"), f.str("uygulama"), f.strOpt("baslik"), f.strOpt("metin"),

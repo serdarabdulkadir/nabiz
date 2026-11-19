@@ -180,6 +180,28 @@ final class AlertCenter {
         }
     }
 
+    // MARK: AI limit bildirimleri (kimlik oneki nabiz.ai.*)
+
+    func aiNotify(id: String, title: String, body: String) {
+        guard let center else { return }
+        let c = UNMutableNotificationContent()
+        c.title = title; c.body = body; c.sound = .default
+        center.add(UNNotificationRequest(identifier: "nabiz.ai.\(id)", content: c, trigger: nil))
+    }
+
+    /// `after` sn sonra gosterilir (ayni kimlikle yeniden kurulursa onceki yerine gecer).
+    func aiSchedule(id: String, title: String, body: String, after seconds: TimeInterval) {
+        guard let center, seconds > 0 else { return }
+        let c = UNMutableNotificationContent()
+        c.title = title; c.body = body; c.sound = .default
+        center.add(UNNotificationRequest(identifier: "nabiz.ai.\(id)", content: c,
+                                         trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)))
+    }
+
+    func aiCancelPending(ids: [String]) {
+        center?.removePendingNotificationRequests(withIdentifiers: ids.map { "nabiz.ai.\($0)" })
+    }
+
     // MARK: Ic
 
     private func finish(_ fires: [AlertFire]) {

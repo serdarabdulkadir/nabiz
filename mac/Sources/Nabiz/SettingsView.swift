@@ -4,7 +4,7 @@ import ServiceManagement
 import NabizCore
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case modules = "Modüller", bar = "Menü Çubuğu", notifications = "Bildirimler", phone = "Telefon", general = "Genel"
+    case modules = "Modüller", bar = "Menü Çubuğu", notifications = "Bildirimler", phone = "Telefon", ai = "AI", general = "Genel"
     var id: String { rawValue }
 }
 
@@ -37,6 +37,7 @@ struct SettingsView: View {
                     case .bar: BarSettings()
                     case .notifications: NotificationSettings()
                     case .phone: PhoneSettings()
+                    case .ai: AISettings()
                     case .general: GeneralSettings()
                     }
                 }
@@ -178,6 +179,12 @@ private struct BarSettings: View {
             .padding(12)
             .background(Palette.fill, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             Footnote(text: "Önizlemeler şu anki değerlerle çizilir. Hangi değerlerin görüneceğini Modüller sekmesinden seçebilirsin.")
+            SectionTitle(text: "AI simgesi")
+            AIBarStylePicker()
+            Box {
+                ToggleRow(symbol: "gauge.with.dots.needle.50percent", title: "Menü çubuğunda AI göster",
+                          subtitle: "En az bir sağlayıcı bağlıysa görünür. Stil yukarıdan seçilir.", key: BarModule.ai.key, defaultOn: true)
+            }
             Box {
                 ToggleRow(title: "Yüzdeyi göster",
                           subtitle: "Halkalar, çubuklar, grafik ve tek simge stillerinde değeri simgenin yanında gösterir.",
@@ -186,6 +193,70 @@ private struct BarSettings: View {
                 ToggleRow(title: "Kritik değerde kırmızı",
                           subtitle: "Pil %20 ve altı (şarjda değilken), disk %90 ve üstü, bellek basıncı kritik ya da CPU %85 ve üstü.",
                           key: MenuBarKey.critical, defaultOn: true)
+            }
+        }
+    }
+}
+
+/// AI simgesi / sütunu seçimi: 5 önizlemeli kart (Yalnız yüzde + AI Limit Tracker'ın 4 simge stili).
+private struct AIBarStylePicker: View {
+    @AppStorage(MenuBarKey.aiStyle) private var style: AIBarStyle = .column
+    var store = AIStore.shared
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(AIBarStyle.allCases) { s in card(s) }
+            }
+            if !store.hasEnabled {
+                Footnote(text: "Önizleme için Ayarlar > AI'dan bir sağlayıcı aç ve bağla.")
+            }
+        }
+        .padding(12)
+        .background(Palette.fill, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+    }
+
+    private func card(_ s: AIBarStyle) -> some View {
+        let selected = style == s
+        return Button { style = s } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) { preview(s).fixedSize(); Spacer(minLength: 0) }
+                    .padding(.horizontal, 8).frame(height: 26)
+                    .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                HStack(spacing: 6) {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                    Text(s.title).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.primary)
+                }
+                Text(s.detail).font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(10)
+            .background(Palette.fillSubtle, in: RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.row, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor : Palette.stroke, lineWidth: selected ? 2 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    /// Güncel verilerle önizleme; veri yoksa "--" (uydurma değer yok).
+    @ViewBuilder
+    private func preview(_ s: AIBarStyle) -> some View {
+        if s == .column {
+            HStack(spacing: 3) {
+                Text("AI").opacity(0.75)
+                Text(store.barPercent.map { Format.percent(Int($0.rounded())) } ?? Format.missing)
+            }
+            .font(.system(size: 13, weight: .medium)).monospacedDigit().foregroundStyle(Color.white)
+        } else {
+            let entries = store.menuEntries(style: s)
+            if entries.isEmpty {
+                Text(Format.missing).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white.opacity(0.7))
+            } else {
+                Image(nsImage: AIMenuIcon.image(entries, style: s, label: .white))
             }
         }
     }
@@ -354,6 +425,105 @@ private struct NotificationSettings: View {
             Footnote(text: "Bir uyarı koşul doğru olunca bir kez bildirilir; en erken 30 dakika sonra yeniden. Telefon kuralları yalnız bağlıyken ve veri tazeyken çalışır.")
         }
         .task { await center.refreshAuthorization(requestIfNeeded: false) }
+    }
+}
+
+// MARK: AI
+
+private struct AISettings: View {
+    var store = AIStore.shared
+    var login = ToolLogin.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionTitle(text: "Sağlayıcılar")
+            ForEach(AIProviderID.allCases) { id in providerBox(id) }
+            Footnote(text: "Limitler bu Mac'te okunur; token'lar Mac'ten çıkmaz. Nabız hiçbir aracın giriş anahtarını kullanmaz ve token yenilemez: Claude Code, Codex ve Cursor'un kendi oturumu okunur. Oturum düşerse \"Giriş yap\" aracın kendi girişini başlatır. Claude Code oturumu Anahtar Zinciri'nde ise macOS bir kez izin ister.")
+            SectionTitle(text: "Bildirimler")
+            Box {
+                ToggleRow(symbol: "gauge.with.dots.needle.67percent", title: "Limitin %75'ine ulaşınca",
+                          subtitle: "Pencere başına bir kez; yalnız genel limitler.", key: SettingsKey.aiNotify75, defaultOn: true)
+                RowDivider()
+                ToggleRow(symbol: "exclamationmark.triangle", title: "Limitin %90'ına ulaşınca",
+                          subtitle: "Limite çok yaklaştığında.", key: SettingsKey.aiNotify90, defaultOn: true)
+                RowDivider()
+                ToggleRow(symbol: "arrow.counterclockwise.circle", title: "Limit yenilenince",
+                          subtitle: "Yüksek kullandığın limit sıfırlanınca haber verir.", key: SettingsKey.aiNotifyReset, defaultOn: true)
+            }
+            SectionTitle(text: "Telefon")
+            Box {
+                ToggleRow(symbol: "smartphone", title: "Telefonda göster",
+                          subtitle: "Limitler eşleşmiş telefonda da görünür.", key: SettingsKey.aiShowOnPhone, defaultOn: true)
+            }
+        }
+    }
+
+    /// Sağlayıcı + altında hesap listesi ve "Hesap ekle".
+    private func providerBox(_ id: AIProviderID) -> some View {
+        let enabled = store.enabledSet.contains(id)
+        let accounts = store.accounts(for: id)
+        return Box {
+            localRow(id)
+            if enabled {
+                ForEach(accounts.filter { !$0.isLocal || accounts.count > 1 }) { account in
+                    RowDivider()
+                    accountRow(account)
+                }
+                RowDivider()
+                Row(title: "Hesap ekle", subtitle: "\(id.webHost) girişi ayrı bir pencerede açılır; her hesap kendi oturumunu tutar.") {
+                    Button("Hesap ekle") { store.addAccount(id) }
+                }
+            }
+        }
+    }
+
+    private func localRow(_ id: AIProviderID) -> some View {
+        let local = AIAccount.local(id)
+        let u = store.usage(of: local)
+        let on = Binding(get: { store.enabledSet.contains(id) }, set: { store.setEnabled(id, $0) })
+        let status: String = {
+            if login.running.contains(id) { return "Tarayıcıda giriş bekleniyor…" }
+            if let i = u.issue { return i.text }
+            if u.isConnected { return "Bağlı" + (u.plan.map { " · \($0)" } ?? "") }
+            return store.enabledSet.contains(id) ? "Okunuyor…" : "Kapalı"
+        }()
+        return Row(title: id.name, subtitle: status) {
+            HStack(spacing: 8) {
+                if store.enabledSet.contains(id), !u.isConnected || u.issue?.action == .login {
+                    Button("Giriş yap") { store.login(local) }.disabled(login.running.contains(id))
+                    if ToolLogin.isAvailable(id) { Button("Pencerede") { store.webLogin(local) } }
+                }
+                Toggle("", isOn: on).labelsHidden().toggleStyle(.switch)
+            }
+        }
+    }
+
+    private func accountRow(_ account: AIAccount) -> some View {
+        let u = store.usage(of: account)
+        let status = u.issue?.text ?? (u.isConnected ? "Bağlı" + (u.plan.map { " · \($0)" } ?? "") : "Okunuyor…")
+        return Row(title: account.isLocal ? "Bu Mac · \(store.label(account))" : store.label(account),
+                   subtitle: [account.email, status].compactMap { $0 }.joined(separator: " · ")) {
+            HStack(spacing: 8) {
+                if u.issue?.action == .login { Button("Giriş yap") { store.webLogin(account) } }
+                Button("Adlandır") {
+                    if let name = AISettings.promptName(current: account.customName) { store.rename(account, to: name) }
+                }
+                if !account.isLocal { Button("Kaldır", role: .destructive) { store.remove(account) } }
+            }
+        }
+    }
+
+    @MainActor
+    static func promptName(current: String?) -> String? {
+        let alert = NSAlert()
+        alert.messageText = "Hesap adı"
+        alert.informativeText = "Kartta ve bildirimlerde bu ad görünür. Boş bırakırsan sıra numarası kullanılır."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.stringValue = current ?? ""
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Kaydet")
+        alert.addButton(withTitle: "Vazgeç")
+        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 }
 

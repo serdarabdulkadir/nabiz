@@ -93,6 +93,9 @@ class NabizClient(
     private var localClose: CloseReason? = null
     @Volatile private var readyReached = false
     @Volatile private var connScope: CoroutineScope? = null
+    private val _ai = MutableStateFlow<List<AiProvider>>(emptyList())
+    /** Mac'ten gelen son ai.state saglayicilari; baglanti kopunca temizlenir. */
+    val ai: StateFlow<List<AiProvider>> = _ai.asStateFlow()
     private val kick = AtomicBoolean(false)
     @Volatile private var preferredId: String? = null
     @Volatile private var lastBad = false
@@ -127,6 +130,7 @@ class NabizClient(
         closeSocket()
         discovery.onNetworkChanged = null
         discovery.stop()
+        _ai.value = emptyList()
         _state.value = LinkState()
     }
 
@@ -134,6 +138,7 @@ class NabizClient(
     fun unpair() {
         store.unpin()
         closeSocket()
+        _ai.value = emptyList()
         _state.update { it.copy(macSnap = null, macSnapAt = 0L, macState = null) }
     }
 
@@ -187,6 +192,7 @@ class NabizClient(
         val scope = CoroutineScope(currentCoroutineContext())
         while (scope.isActive) {
             _state.update { it.copy(phase = LinkPhase.SEARCHING, sas = null) }
+            _ai.value = emptyList()
             val wait = backoff.next()
             injectLastAddress()
             val target = pick(discovery.found.value) ?: waitForTarget(wait)
@@ -210,6 +216,7 @@ class NabizClient(
             var reason = runConnection(chosen, backoff)
             if (via == LinkVia.REMOTE && !readyReached && reason == LinkReason.LOST) reason = LinkReason.NOT_FOUND
             android.util.Log.i("NabizLink", "koptu: $reason")
+            _ai.value = emptyList()
             _state.update { it.copy(phase = LinkPhase.SEARCHING, sas = null, reason = disconnectReason(reason, it.macState), rttMs = null, peerVersion = if (reason == LinkReason.VERSION) versionPeer else null) }
             // Mac yeniden baslayinca port degisir; NSD eski cozumu "guncelleme" olarak bildirir ve
             // onServiceFound tekrar gelmez. Her kopuşta kesfi bastan baslat ki bayat adres kullanilmasin.
@@ -439,6 +446,7 @@ class NabizClient(
             is PeerMessage.PermState, is PeerMessage.CallState, is PeerMessage.ContactsPage, is PeerMessage.ContactsChanged,
             is PeerMessage.CallLogPage, is PeerMessage.CallLogChanged, is PeerMessage.NotifList, is PeerMessage.NotifPosted,
             is PeerMessage.NotifRemoved, is PeerMessage.NotifResult -> {}
+            is PeerMessage.AiState -> _ai.value = m.saglayicilar
         }
     }
 }

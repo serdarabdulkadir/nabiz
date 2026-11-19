@@ -383,6 +383,75 @@
         "anahtar": "0|com.whatsapp|1|null|10123",
         "sonuc": "tamam"
       }
+    },
+    {
+      "ad": "ai-state",
+      "json": {
+        "t": "ai.state",
+        "saglayicilar": [
+          {
+            "id": "claude",
+            "ad": "Claude",
+            "plan": "Max",
+            "guncel": 1795000300,
+            "limitler": [
+              {
+                "id": "claude.five_hour",
+                "ad": "5 saat",
+                "yuzde": 42,
+                "sifirlanma": 1795010000,
+                "genel": true,
+                "tukenme": 5400
+              },
+              {
+                "id": "claude.seven_day",
+                "ad": "Haftalık",
+                "yuzde": 61,
+                "sifirlanma": 1795300000,
+                "genel": true
+              },
+              {
+                "id": "claude.opus",
+                "ad": "Opus",
+                "yuzde": 12,
+                "genel": false
+              }
+            ],
+            "hesapId": "claude"
+          },
+          {
+            "id": "claude",
+            "hesapId": "5B1E0C3A-7D2F-4E21-9A6B-1C2D3E4F5A6B",
+            "hesap": "İş",
+            "ad": "Claude",
+            "plan": "Pro",
+            "limitler": [
+              {
+                "id": "5B1E0C3A-7D2F-4E21-9A6B-1C2D3E4F5A6B.claude.five_hour",
+                "ad": "5 saat",
+                "yuzde": 100,
+                "sifirlanma": 1795004000,
+                "genel": true
+              }
+            ]
+          },
+          {
+            "id": "cursor",
+            "ad": "Cursor",
+            "not": "$15,60 / $20",
+            "sorun": "Cursor oturumu dolmuş.",
+            "limitler": [],
+            "hesapId": "cursor"
+          }
+        ]
+      }
+    },
+    {
+      "ad": "ai-state-bos",
+      "json": {
+        "t": "ai.state",
+        "saglayicilar": []
+      }
     }
   ],
   "hs": {

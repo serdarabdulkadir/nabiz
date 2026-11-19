@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
-            AlertCenter.shared.start(); MonitorModel.shared.start(); PhoneModel.shared.start()
+            AlertCenter.shared.start(); MonitorModel.shared.start(); PhoneModel.shared.start(); AIStore.shared.start()
             if CommandLine.arguments.contains("--ayarlar") { SettingsWindow.show() }
         }
     }

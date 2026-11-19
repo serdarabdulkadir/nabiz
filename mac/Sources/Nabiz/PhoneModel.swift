@@ -61,6 +61,8 @@ final class PhoneModel {
     @ObservationIgnored private var rtt = RTTTracker()
     @ObservationIgnored private var lastPing = Date()
     @ObservationIgnored private var requestId = 100
+    @ObservationIgnored private var lastAISent: (at: Date, providers: [AIWireProvider])?
+    @ObservationIgnored private var aiPendingSend = false
     @ObservationIgnored private var repliedAt: [String: Date] = [:]   // Mac'ten yanitlanan anahtar -> an (banner bastirma)
     @ObservationIgnored private var contactsLoaded = false
     @ObservationIgnored private var contactsDirty = false
@@ -82,9 +84,10 @@ final class PhoneModel {
         mon.onChange = { [weak self] k, e, u in self?.sendMacState(k, e, u) }
         mon.start()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { CallBubbleController.shared.update() }
+            MainActor.assumeIsolated { CallBubbleController.shared.update(); PhoneModel.shared.aiChanged() }
         }
         startHousekeeping()
+        AIStore.shared.onChange = { [weak self] in self?.aiChanged() }
         server.start(name: Self.computerName(), deviceId: store.deviceId())
         let srv = server
         discovery.start(deviceId: store.deviceId(), name: Self.computerName()) { srv.tcpPort }
@@ -188,6 +191,8 @@ final class PhoneModel {
             send(.sub(aralikSn: MonitorModel.shared.panelOpen ? 2 : 10))
             sendStats(id: nil)
             sendMacState(MacStateMonitor.shared.locked, MacStateMonitor.shared.screenOff, false)
+            lastAISent = nil
+            sendAIState()
             sendPing()
             restartStatsLoop()
         case .mesaj(let env):
@@ -244,7 +249,7 @@ final class PhoneModel {
             AlertCenter.shared.removePhoneNotifications(keys: [key])
         case .notifResult(let key, let result): replyResults[key] = result
         case .callAnswer, .callReject, .callHangup, .callDial, .contactsSync, .callLogSync,
-             .notifDismiss, .notifClear, .notifReply: break   // mac->tel yonu; telefondan gelmez
+             .notifDismiss, .notifClear, .notifReply, .aiState: break   // mac->tel yonu; telefondan gelmez
         case .stats(let s):
             snapshot = s
             AlertCenter.shared.phoneSnapshot(s, ready: link == .bagli, name: phoneName ?? paired?.name)
@@ -364,6 +369,32 @@ final class PhoneModel {
         replyResults[key] = nil
         repliedAt[key] = Date()
         send(.notifReply(anahtar: key, metin: t), id: nextId())
+    }
+
+    // MARK: AI limitleri (bolum 12)
+
+    /// Veri ya da ayar degisti: en sik 10 sn'de bir, yalniz icerik degistiyse gonderilir.
+    func aiChanged() {
+        guard link == .bagli else { return }
+        if let last = lastAISent, Date().timeIntervalSince(last.at) < 10 {
+            guard !aiPendingSend else { return }
+            aiPendingSend = true
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(10))
+                self?.aiPendingSend = false
+                self?.sendAIState()
+            }
+            return
+        }
+        sendAIState()
+    }
+
+    private func sendAIState() {
+        guard link == .bagli else { return }
+        let providers = AIStore.shared.wireProviders()
+        if let last = lastAISent, last.providers == providers { return }
+        lastAISent = (Date(), providers)
+        send(.aiState(providers))
     }
 
     // MARK: Gonderim
