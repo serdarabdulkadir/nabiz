@@ -38,6 +38,23 @@ class PeerStore(context: Context) {
         get() = prefs.getString("remote_address", null)?.takeIf { it.isNotBlank() }
         set(v) { prefs.edit().apply { if (v.isNullOrBlank()) remove("remote_address") else putString("remote_address", v.trim()) }.apply() }
 
+    /** Son basarili oturumun Mac adresi (pinle birlikte; bolum 11). */
+    class LastMac(val id: String, val host: String, val port: Int)
+
+    var lastMac: LastMac?
+        get() {
+            val id = prefs.getString("last_id", null) ?: return null
+            val host = prefs.getString("last_host", null) ?: return null
+            val port = prefs.getInt("last_port", 0).takeIf { it in 1..65535 } ?: return null
+            return LastMac(id, host, port)
+        }
+        set(v) {
+            prefs.edit().apply {
+                if (v == null) remove("last_id").remove("last_host").remove("last_port")
+                else putString("last_id", v.id).putString("last_host", v.host).putInt("last_port", v.port)
+            }.apply()
+        }
+
     val deviceId: String
         @Synchronized get() = prefs.getString("device_id", null)
             ?: UUID.randomUUID().toString().also { prefs.edit().putString("device_id", it).apply() }
@@ -54,7 +71,7 @@ class PeerStore(context: Context) {
     }
 
     fun unpin() {
-        prefs.edit().remove("pin_id").remove("pin_name").remove("pin_pub").apply()
+        prefs.edit().remove("pin_id").remove("pin_name").remove("pin_pub").remove("last_id").remove("last_host").remove("last_port").apply()
         _pinned.value = null
     }
 

@@ -48,16 +48,16 @@ final class PhoneModel {
 
     @ObservationIgnored private let store = PeerStore()
     @ObservationIgnored private let server = PeerServer()
-    @ObservationIgnored private var session: PeerSession?
-    @ObservationIgnored private var linkId: Int?
+    @ObservationIgnored private let discovery = DiscoveryResponder()
+    @ObservationIgnored private var sessions: [Int: PeerSession] = [:]   // baglanti kimligi -> oturum (aktif + aday)
+    @ObservationIgnored private var openedAts: [Int: Date] = [:]
+    @ObservationIgnored private var sasSinces: [Int: Date] = [:]
     @ObservationIgnored private var started = false
     @ObservationIgnored private var statsTask: Task<Void, Never>?
     @ObservationIgnored private var housekeeping: Task<Void, Never>?
     @ObservationIgnored private var interval = 10
     @ObservationIgnored private var lastReceived = Date()
     @ObservationIgnored private var lastSent = Date()
-    @ObservationIgnored private var openedAt = Date()
-    @ObservationIgnored private var sasSince = Date()
     @ObservationIgnored private var rtt = RTTTracker()
     @ObservationIgnored private var lastPing = Date()
     @ObservationIgnored private var requestId = 100
@@ -76,7 +76,7 @@ final class PhoneModel {
         paired = store.pairedPhone()
         server.onOpen = { [weak self] id in self?.opened(id) }
         server.onData = { [weak self] id, data in self?.received(id, data) }
-        server.onClose = { [weak self] id in self?.closed(id) }
+        server.onClose = { [weak self] id, wasActive in self?.closed(id, wasActive: wasActive) }
         server.onListenState = { [weak self] err in self?.listenError = err }
         let mon = MacStateMonitor.shared
         mon.onChange = { [weak self] k, e, u in self?.sendMacState(k, e, u) }
@@ -84,16 +84,19 @@ final class PhoneModel {
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { CallBubbleController.shared.update() }
         }
+        startHousekeeping()
         server.start(name: Self.computerName(), deviceId: store.deviceId())
+        let srv = server
+        discovery.start(deviceId: store.deviceId(), name: Self.computerName()) { srv.tcpPort }
     }
 
     // MARK: Disaridan cagrilar
 
     func confirmSAS(accepted: Bool) {
-        guard link == .sasBekliyor, var s = session else { return }
+        guard link == .sasBekliyor, let cid = server.slots.candidate, var s = sessions[cid] else { return }
         let out = s.confirmSAS(accepted: accepted)
-        session = s
-        apply(out)
+        sessions[cid] = s
+        apply(out, from: cid)
     }
 
     /// Eslesmeyi unut: pin silinir, baglanti kapanir.
@@ -101,7 +104,7 @@ final class PhoneModel {
         store.forgetPairedPhone()
         paired = nil
         lastError = nil
-        server.closeActive()
+        server.closeAll()
     }
 
     /// Mac paneli acildi/kapandi: telefona yeni `sub` gonderilir (2 sn / 10 sn).
@@ -118,51 +121,66 @@ final class PhoneModel {
                               model: model.isEmpty ? nil : (model.count == 2 ? "\(model[0]) (\(model[1]))" : model[0]))
         var s = PeerSession(role: .mac, identity: store.identity(), hello: hello, pinnedPeerKey: store.pairedPhone()?.key)
         let out = s.start()
-        session = s
-        linkId = id
-        link = .elSikisma
-        lastError = nil
-        sas = nil; SASPrompt.hide()
-        openedAt = Date(); lastReceived = Date(); lastSent = Date()
-        interval = 10
-        rtt.reset(); latencyMs = nil
-        apply(out)
-        startHousekeeping()
+        sessions[id] = s
+        openedAts[id] = Date()
+        if server.slots.active == nil { lastError = nil }
+        refreshLink()
+        apply(out, from: id)
     }
 
     private func received(_ id: Int, _ data: Data) {
-        guard id == linkId, var s = session else { return }
-        lastReceived = Date()
+        guard var s = sessions[id] else { return }
+        if id == server.slots.active { lastReceived = Date() }
         let out = s.receive(data)
-        session = s
-        apply(out)
+        sessions[id] = s
+        apply(out, from: id)
     }
 
-    private func closed(_ id: Int) {
-        guard id == linkId else { return }
-        statsTask?.cancel(); housekeeping?.cancel()
-        statsTask = nil; housekeeping = nil
-        session = nil; linkId = nil
-        link = .dinliyor
-        sas = nil; SASPrompt.hide()
-        // Eski veri yaniltmasin: bagli degilken karolar gosterilmez, ama son gorulme kalir.
+    private func closed(_ id: Int, wasActive: Bool) {
+        sessions[id] = nil; openedAts[id] = nil; sasSinces[id] = nil
+        if wasActive { endActiveSession() }
+        refreshLink()
+    }
+
+    /// Aktif oturum bitti (kapandi ya da yenisi devraldi): eski veri yaniltmasin, karolar gosterilmez; son gorulme kalir.
+    private func endActiveSession() {
+        statsTask?.cancel(); statsTask = nil
         snapshot = nil
         rtt.reset(); latencyMs = nil
         clearPhoneData()
     }
 
-    private func apply(_ out: PeerSessionOutput) {
-        for f in out.frames { server.send(f); lastSent = Date() }
-        for e in out.events { handle(e) }
+    /// Gorunen baglanti durumu: aktif varsa bagli, yoksa adayin el sikisma / SAS asamasi, yoksa dinliyor.
+    private func refreshLink() {
+        if server.slots.active != nil {
+            link = .bagli
+        } else if let c = server.slots.candidate, let s = sessions[c] {
+            link = s.state == .sasBekliyor ? .sasBekliyor : .elSikisma
+        } else {
+            link = .dinliyor
+        }
+        if link != .sasBekliyor { sas = nil; SASPrompt.hide() }
     }
 
-    private func handle(_ event: PeerSessionEvent) {
+    private func apply(_ out: PeerSessionOutput, from id: Int) {
+        for f in out.frames { server.send(f, to: id); if id == server.slots.active { lastSent = Date() } }
+        for e in out.events { handle(e, from: id) }
+    }
+
+    private func handle(_ event: PeerSessionEvent, from id: Int) {
         switch event {
         case .sasGerekli(let code, _):
-            sas = code; sasSince = Date(); link = .sasBekliyor; SASPrompt.show(code: code)
+            sas = code; sasSinces[id] = Date(); SASPrompt.show(code: code)
+            refreshLink()
         case .kuruldu(let key, let name):
-            sas = nil; SASPrompt.hide()
-            link = .bagli
+            // Aday dogrulandi: eski oturum (varsa) kapanir, aday aktif olur.
+            let r = server.promote(id)
+            guard r.promoted else { server.close(id); return }
+            if let old = r.replaced { sessions[old] = nil; openedAts[old] = nil; sasSinces[old] = nil; endActiveSession() }
+            lastReceived = Date(); lastSent = Date(); lastError = nil
+            interval = 10
+            rtt.reset(); latencyMs = nil
+            refreshLink()
             if store.pairedPhone()?.key != key { store.savePairedPhone(PairedPhone(key: key, name: name, model: nil)) }
             paired = store.pairedPhone()
             phoneName = name
@@ -172,12 +190,15 @@ final class PhoneModel {
             sendMacState(MacStateMonitor.shared.locked, MacStateMonitor.shared.screenOff, false)
             sendPing()
             restartStatsLoop()
-        case .mesaj(let env): handle(env)
+        case .mesaj(let env):
+            guard id == server.slots.active else { return }
+            handle(env)
         case .bilinmeyenTip:
+            guard id == server.slots.active else { return }
             send(.error(PeerError(kod: "bilinmeyen_tip")))
         case .kapandi(let err):
             if let text = Self.describe(err) { lastError = text }
-            server.closeActive()
+            server.close(id)
         }
     }
 
@@ -348,13 +369,13 @@ final class PhoneModel {
     // MARK: Gonderim
 
     private func send(_ message: PeerMessage, id: Int? = nil) {
-        guard var s = session else { return }
+        guard let aid = server.slots.active, var s = sessions[aid] else { return }
         do {
             let frame = try s.send(PeerEnvelope(message, id: id))
-            session = s
-            server.send(frame); lastSent = Date()
+            sessions[aid] = s
+            server.send(frame, to: aid); lastSent = Date()
         } catch {
-            server.closeActive()
+            server.close(aid)
         }
     }
 
@@ -380,7 +401,7 @@ final class PhoneModel {
         }
     }
 
-    /// ping 15 sn, 45 sn sessizlikte kapat; el sikisma 10 sn, SAS onayi 60 sn zaman asimi.
+    /// Aday: el sikisma 10 sn, SAS onayi 60 sn zaman asimi. Aktif: ping 15 sn, 45 sn sessizlikte kapat.
     private func startHousekeeping() {
         housekeeping?.cancel()
         housekeeping = Task { [weak self] in
@@ -394,15 +415,16 @@ final class PhoneModel {
 
     private func tick() {
         let now = Date()
-        switch link {
-        case .elSikisma:
-            if now.timeIntervalSince(openedAt) > 10 { lastError = "El sıkışma zaman aşımı"; server.closeActive() }
-        case .sasBekliyor:
-            if now.timeIntervalSince(sasSince) > 60 { lastError = "Eşleşme onayı zaman aşımı"; server.closeActive() }
-        case .bagli:
-            if now.timeIntervalSince(lastReceived) > 45 { lastError = "Telefondan yanıt yok"; server.closeActive(); return }
+        for (id, s) in Array(sessions) where id != server.slots.active {
+            if s.state == .elSikismaBekliyor, now.timeIntervalSince(openedAts[id] ?? now) > ConnectionSlots.candidateTimeout {
+                lastError = "El sıkışma zaman aşımı"; server.close(id)
+            } else if s.state == .sasBekliyor, now.timeIntervalSince(sasSinces[id] ?? now) > 60 {
+                lastError = "Eşleşme onayı zaman aşımı"; server.close(id)
+            }
+        }
+        if let aid = server.slots.active {
+            if now.timeIntervalSince(lastReceived) > 45 { lastError = "Telefondan yanıt yok"; server.close(aid); return }
             if now.timeIntervalSince(lastPing) >= 15 { sendPing() }
-        case .dinliyor: break
         }
     }
 
@@ -467,7 +489,7 @@ final class PhoneModel {
     }
 
     private static var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.0"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.1"
     }
 
     private static func describe(_ e: PeerSessionError) -> String? {

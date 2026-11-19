@@ -56,6 +56,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
     val link by vm.link.collectAsStateWithLifecycle()
     val phone by vm.phone.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
+    val found by vm.found.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settings by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -115,7 +116,7 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                             label = "tab",
                         ) { t ->
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                                if (t == 0) PhoneTab(phone, vm.history) else MacTab(link, vm::sendCmd, vm.history)
+                                if (t == 0) PhoneTab(phone, vm.history) else MacTab(link, vm::sendCmd, vm.history, found, pinned?.id, vm::connectTo, vm::rescan)
                             }
                         }
                         Spacer(Modifier.height(Space.xl))

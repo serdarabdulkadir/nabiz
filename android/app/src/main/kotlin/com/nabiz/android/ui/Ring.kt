@@ -89,7 +89,7 @@ fun RingTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
-        Text(title.uppercase(), style = NabizType.micro, color = c.textSecondary)
+        Text(title.uppercase(java.util.Locale.forLanguageTag("tr")), style = NabizType.micro, color = c.textSecondary)
         Ring(fraction, color) { AnimatedNumber(value, NabizType.ringValue, if (fraction == null) c.textTertiary else color) }
         Text(detail ?: " ", style = NabizType.caption, color = c.textSecondary, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
     }

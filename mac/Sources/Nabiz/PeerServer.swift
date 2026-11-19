@@ -1,6 +1,8 @@
-// Ag kabugu: NWListener (TCP, Bonjour _nabiz._tcp) + tek aktif baglanti. Protokol mantigi PhoneModel/PeerSession'da.
+// Ag kabugu: NWListener (TCP, Bonjour _nabiz._tcp), TCP_NODELAY, 1 aktif + 1 aday baglanti (ConnectionSlots).
+// Protokol mantigi PhoneModel/PeerSession'da.
 import Foundation
 import Network
+import NabizCore
 
 @MainActor
 final class PeerServer {
@@ -10,14 +12,15 @@ final class PeerServer {
 
     var onOpen: ((Int) -> Void)?
     var onData: ((Int, Data) -> Void)?
-    var onClose: ((Int) -> Void)?
+    /// (id, aktif miydi)
+    var onClose: ((Int, Bool) -> Void)?
     /// nil = dinliyor; aksi halde hata metni.
     var onListenState: ((String?) -> Void)?
 
     private var listener: NWListener?
-    private var active: (id: Int, conn: NWConnection)?
+    private var conns: [Int: NWConnection] = [:]
+    private(set) var slots = ConnectionSlots()
     private var nextId = 1
-    private var lastReceive = Date()
     private var txt: (name: String, deviceId: String)?
     private var stopped = true
     private var usedFallbackPort = false
@@ -31,7 +34,20 @@ final class PeerServer {
     func stop() {
         stopped = true
         listener?.cancel(); listener = nil
-        closeActive()
+        closeAll()
+    }
+
+    /// Dinlenen TCP portu (Bonjour / UDP kesif yaniti icin); dinlemiyorsa nil.
+    var tcpPort: UInt16? { listener?.port?.rawValue }
+
+    private static func parameters() -> NWParameters {
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true            // Nagle kapali: kucuk cerceveler gecikmeden gider
+        tcp.enableKeepalive = true
+        tcp.keepaliveIdle = 10
+        tcp.keepaliveInterval = 5
+        tcp.keepaliveCount = 3
+        return NWParameters(tls: nil, tcp: tcp)
     }
 
     private func startListener() {
@@ -39,10 +55,10 @@ final class PeerServer {
         do {
             let l: NWListener
             if !usedFallbackPort, let port = NWEndpoint.Port(rawValue: Self.preferredPort) {
-                do { l = try NWListener(using: .tcp, on: port) }
-                catch { usedFallbackPort = true; l = try NWListener(using: .tcp) }
+                do { l = try NWListener(using: Self.parameters(), on: port) }
+                catch { usedFallbackPort = true; l = try NWListener(using: Self.parameters()) }
             } else {
-                l = try NWListener(using: .tcp)
+                l = try NWListener(using: Self.parameters())
             }
             var record = NWTXTRecord()
             record["ad"] = txt.name
@@ -84,15 +100,14 @@ final class PeerServer {
     }
 
     private func accept(_ conn: NWConnection) {
-        if let a = active {
-            // Tek oturum: canli baglanti varken ikinci baglanti reddedilir; 20 sn sessiz kalmis (olu) baglanti yerine gecer.
-            if Date().timeIntervalSince(lastReceive) < 20 { conn.cancel(); return }
-            closeActive()
-            _ = a
-        }
         let id = nextId; nextId += 1
-        active = (id, conn)
-        lastReceive = Date()
+        // Aday yeri doluysa hemen kapat (beklemede birakma): start + cancel.
+        guard slots.opened(id) == .aday else {
+            conn.start(queue: .main)
+            conn.cancel()
+            return
+        }
+        conns[id] = conn
         conn.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 switch state {
@@ -109,12 +124,9 @@ final class PeerServer {
     private func receiveLoop(id: Int, conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             Task { @MainActor in
-                guard let self, self.active?.id == id else { return }
-                if let data, !data.isEmpty {
-                    self.lastReceive = Date()
-                    self.onData?(id, data)
-                }
-                guard self.active?.id == id else { return }   // onData oturumu kapatmis olabilir
+                guard let self, self.conns[id] != nil else { return }
+                if let data, !data.isEmpty { self.onData?(id, data) }
+                guard self.conns[id] != nil else { return }   // onData oturumu kapatmis olabilir
                 if isComplete || error != nil { self.connectionEnded(id); return }
                 self.receiveLoop(id: id, conn: conn)
             }
@@ -122,18 +134,24 @@ final class PeerServer {
     }
 
     private func connectionEnded(_ id: Int) {
-        guard active?.id == id else { return }
-        active?.conn.cancel()
-        active = nil
-        onClose?(id)
+        guard let conn = conns.removeValue(forKey: id) else { return }
+        conn.cancel()
+        let wasActive = slots.closed(id)
+        onClose?(id, wasActive)
     }
 
-    func send(_ data: Data) {
-        active?.conn.send(content: data, completion: .contentProcessed { _ in })
+    /// Aday dogrulandi: aktif olur, eski aktif baglanti sessizce kapatilir (onClose cagrilmaz).
+    func promote(_ id: Int) -> (promoted: Bool, replaced: Int?) {
+        let r = slots.promote(id)
+        if let old = r.replaced, let conn = conns.removeValue(forKey: old) { conn.cancel() }
+        return r
     }
 
-    func closeActive() {
-        guard let a = active else { return }
-        connectionEnded(a.id)
+    func send(_ data: Data, to id: Int) {
+        conns[id]?.send(content: data, completion: .contentProcessed { _ in })
     }
+
+    func close(_ id: Int) { connectionEnded(id) }
+
+    func closeAll() { for id in Array(conns.keys) { connectionEnded(id) } }
 }

@@ -48,5 +48,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setShare(key: com.nabiz.android.phone.ShareKey, on: Boolean) = nabiz.phone.setShare(key, on)
     fun refreshShare() = nabiz.phone.refresh()
 
+    val found get() = nabiz.client.found
+    fun connectTo(id: String) = nabiz.client.connectTo(id)
+    fun rescan() = nabiz.client.rescan()
+
     fun unpair() = nabiz.client.unpair()
 }

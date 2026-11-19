@@ -22,6 +22,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
 
 enum class LinkPhase { IDLE, SEARCHING, CONNECTING, AWAIT_SAS, READY }
 
@@ -92,9 +93,31 @@ class NabizClient(
     private var localClose: CloseReason? = null
     @Volatile private var readyReached = false
     @Volatile private var connScope: CoroutineScope? = null
+    private val kick = AtomicBoolean(false)
+    @Volatile private var preferredId: String? = null
+    @Volatile private var lastBad = false
+    @Volatile private var backoffRef: ReconnectBackoff? = null
+
+    /** Bulunan Mac'ler (NSD + UDP + son adres, id ile birlesik). */
+    val found: StateFlow<List<MacService>> get() = discovery.found
+
+    /** "Yeniden ara": geri cekilme sifirlanir, kesif bastan, hemen denenir. */
+    fun rescan() {
+        backoffRef?.reset()
+        lastBad = false
+        kick.set(true)
+        if (_state.value.phase != LinkPhase.READY) discovery.restart()
+    }
+
+    /** Listeden bir Mac'e hemen baglan (pinliyse yalniz pinli Mac). */
+    fun connectTo(id: String) {
+        preferredId = id
+        kick.set(true)
+    }
 
     fun start(scope: CoroutineScope) {
         if (job != null) return
+        discovery.onNetworkChanged = { rescan() }
         discovery.start()
         job = scope.launch(Dispatchers.IO) { loop() }
     }
@@ -102,6 +125,7 @@ class NabizClient(
     fun stop() {
         job?.cancel(); job = null
         closeSocket()
+        discovery.onNetworkChanged = null
         discovery.stop()
         _state.value = LinkState()
     }
@@ -152,19 +176,20 @@ class NabizClient(
 
     private fun pick(list: List<MacService>): MacService? {
         val pin = store.pinned.value
+        val pref = preferredId
+        if (pref != null) list.firstOrNull { it.id == pref && (pin == null || pin.id == pref) }?.let { return it }
         return if (pin != null) list.firstOrNull { it.id == pin.id } else list.firstOrNull()
     }
 
     private suspend fun loop() {
         val backoff = ReconnectBackoff()
+        backoffRef = backoff
         val scope = CoroutineScope(currentCoroutineContext())
         while (scope.isActive) {
             _state.update { it.copy(phase = LinkPhase.SEARCHING, sas = null) }
             val wait = backoff.next()
-            val target = pick(discovery.found.value) ?: withTimeoutOrNull(wait) {
-                discovery.found.first { pick(it) != null }
-                pick(discovery.found.value)
-            }
+            injectLastAddress()
+            val target = pick(discovery.found.value) ?: waitForTarget(wait)
             var via = LinkVia.LOCAL
             var conn = target
             if (conn == null) {
@@ -178,6 +203,7 @@ class NabizClient(
                 continue
             }
             val chosen: MacService = conn
+            if (preferredId == chosen.id) preferredId = null
             _state.update { it.copy(phase = LinkPhase.CONNECTING, macName = chosen.name, via = via) }
             android.util.Log.i("NabizLink", "baglaniyor ($via)")
             readyReached = false
@@ -188,8 +214,41 @@ class NabizClient(
             // Mac yeniden baslayinca port degisir; NSD eski cozumu "guncelleme" olarak bildirir ve
             // onServiceFound tekrar gelmez. Her kopuşta kesfi bastan baslat ki bayat adres kullanilmasin.
             discovery.restart()
+            if (!readyReached && reason == LinkReason.LOST) {
+                // Bayat adres: bu kaydi at (gercek kesif yeniden ekler); son adres basariz ise bir sonraki turda denenmez.
+                discovery.forget(chosen.id)
+                if (chosen.source == MacSource.LAST) { lastBad = true; continue }
+            }
             // Surum uyumsuzlugu hizli yeniden deneme dongusune girmez: en uzun geri cekilme.
-            delay(if (reason == LinkReason.VERSION) backoff.longest() else wait)
+            if (reason == LinkReason.VERSION) delay(backoff.longest()) else sleepOrKick(wait)
+        }
+    }
+
+    /** Pinli Mac'in son basarili adresi listeye girer; baglanti ilk onu (1,5 sn zaman asimiyla) dener. */
+    private fun injectLastAddress() {
+        val last = store.lastMac ?: return
+        val pin = store.pinned.value ?: return
+        if (lastBad || pin.id != last.id) return
+        try { discovery.injectLast(last.id, pin.name, InetAddress.getByName(last.host), last.port) } catch (_: Exception) { }
+    }
+
+    /** Hedef bulunana, `ms` dolana ya da kick (yeniden ara / ag degisti / listeden secim) gelene dek bekler. */
+    private suspend fun waitForTarget(ms: Long): MacService? {
+        val end = System.nanoTime() + ms * 1_000_000
+        kick.set(false)
+        while (System.nanoTime() < end) {
+            pick(discovery.found.value)?.let { return it }
+            if (kick.getAndSet(false)) return pick(discovery.found.value)
+            delay(200)
+        }
+        return null
+    }
+
+    private suspend fun sleepOrKick(ms: Long) {
+        val end = System.nanoTime() + ms * 1_000_000
+        while (System.nanoTime() < end) {
+            if (kick.getAndSet(false)) return
+            delay(100)
         }
     }
 
@@ -206,6 +265,7 @@ class NabizClient(
 
     private suspend fun runConnection(target: MacService, backoff: ReconnectBackoff): LinkReason {
         localClose = null
+        kick.set(false)
         versionPeer = null
         rtt.reset()
         val sock = Socket()
@@ -215,8 +275,9 @@ class NabizClient(
         var writerJob: Job? = null
         var pingJob: Job? = null
         try {
-            sock.tcpNoDelay = true
-            sock.connect(InetSocketAddress(target.host, target.port), 10_000)
+            sock.tcpNoDelay = true      // zorunlu (bolum 11): Nagle + gecikmeli ACK RTT'yi ~500 ms yapiyordu
+            sock.keepAlive = true
+            sock.connect(InetSocketAddress(target.host, target.port), if (target.source == MacSource.LAST) 1_500 else 5_000)
             sock.soTimeout = timeoutFor(PeerSession.Phase.HANDSHAKE)
             val ident = store.identity()
             val nonce = ByteArray(16).also { SecureRandom().nextBytes(it) }
@@ -289,6 +350,8 @@ class NabizClient(
                 ready = true
                 readyReached = true
                 curBackoff?.reset()
+                lastBad = false
+                curTarget?.takeIf { it.serviceName != "remote" }?.let { store.lastMac = PeerStore.LastMac(it.id, it.host.hostAddress ?: "", it.port) }
                 store.lastConnected = System.currentTimeMillis()
                 _state.update { it.copy(phase = LinkPhase.READY, sas = null, reason = LinkReason.NONE, macState = null, lastSeenAt = System.currentTimeMillis()) }
             }

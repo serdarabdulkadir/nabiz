@@ -104,7 +104,7 @@ Kurallar:
 - `mac.state`: oturum kurulunca bir kez, sonra her degisimde. Mac kilit durumunu `com.apple.screenIsLocked` / `screenIsUnlocked` dagitik bildirimlerinden, ekrani `NSWorkspace.screensDidSleep/WakeNotification`dan, uykuyu `willSleepNotification`dan okur; uyumadan once `uykuyaGidiyor:true` gonderir (bildirim gec kalabilir, telefon ayrica baglanti kopunca "son gorulme" gosterir).
 - Telefonda butonlar `mac.state`e gore: kilitliyse "Kilitle" pasif; ekran kapaliysa "Uyandir" gorunur; `uykuyaGidiyor` sonrasi kopus "Mac uykuda" olarak gosterilir.
 - Kilit acma YOK (macOS ucuncu parti uygulamaya izin vermez; parola saklamak guvensiz).
-- `ping` en az 15 sn'de bir; 45 sn mesaj gelmezse oturum olu, telefon yeniden baglanir (geri cekilme 2/5/15/30 sn).
+- `ping` en az 15 sn'de bir; 45 sn mesaj gelmezse oturum olu, telefon yeniden baglanir (geri cekilme: bolum 11, 1/2/5/10/30 sn).
 - **Gecikme (2026-11-18):** `ping` artik `id` tasir (gonderene ozel artan sayi); karsi taraf ayni `id` ile `pong` doner. Gonderen, monoton saatle gonderim-yanit farkini **RTT (ms)** olarak olcer; son 5 olcumun ortancasi arayuzde "Gecikme" olarak gosterilir. Oturum kurulunca hemen bir `ping` atilir. `id`siz eski `pong` yok sayilir (olcum yapilmaz). Kablo uzerinde yeni alan yok, eski surumlerle uyumlu.
 - **Surum uyumsuzlugu (2026-11-18):** `hs.v` farkliysa baglanti yine kapatilir ama once iki taraf da kullaniciya acik bir neden gosterir: Mac "Telefondaki Nabiz farkli protokol surumunde (v{X}). Iki uygulamayi da guncelleyin."; Android `LinkReason.VERSION` -> "Mac'teki Nabiz farkli surumde (v{X}). Iki uygulamayi da guncelleyin." Bu durumda telefon hizli yeniden deneme dongusune girmez (en uzun geri cekilme). `hello.protokol` da `hs.v` ile karsilastirilir.
 - **Ortak ornekler:** `docs/fixtures/messages.json` (mesajlar) ve `docs/fixtures/vectors.json` (bolum 8). Iki platformun testleri bu dosyalari OKUR; bu dosyalar ile bu belge tek kaynaktir.
@@ -183,3 +183,14 @@ Kurallar:
 - Mac'te gosterilen macOS banner'lari sistemin Bildirim Merkezi'nde kalir (macOS kendi diskine yazar; uygulama yazmaz). Mac kilitli ya da ekran kapaliyken banner yalniz uygulama adini gosterir, icerik yok.
 - Sayfa/foto kurallari ORBIO `kisiler-protokolu.md` ile ayni: foto en cok 96 px JPEG 8 KB; yalniz numarali kisiler; Mac sira disi `ofset`i yoksayar, `ofset 0` listeyi sifirlar; son arama en cok 300 kayit.
 - Ornekler `docs/fixtures/messages.json` icinde `perm-state`, `call-*`, `contacts-*`, `calllog-*`, `notif-*` adlariyla.
+
+## 11. Hizli baglanti (2026-11-19)
+
+Sorun: ilk baglanti yavas (saniyeler), RTT ~500 ms (ping 3 ms iken), telefon hotspot'unda NSD Mac'i bulamiyor, kopus sonrasi takilma.
+
+- **TCP_NODELAY zorunlu** (iki taraf): Android `Socket.tcpNoDelay = true`; Mac `NWProtocolTCP.Options().noDelay = true` (listener parametreleri). Her cerceve tek `write`/`send` ile gider (uzunluk + yuk birlesik).
+- **Son adres:** telefon, basarili oturum kuran Mac'in `host:port`unu pinle birlikte saklar. Aramaya baslarken ONCE bunu dener (baglanti zaman asimi 1,5 sn), paralelde NSD ve UDP kesif calisir; ilk dogru sonuc kazanir.
+- **UDP kesif** (NSD'ye ek; hotspot ve multicast kisitli aglar icin): Mac UDP `47822`de dinler. Telefon, ayakta olan her IPv4 arayuzunun yonlendirilmis yayin adresine (or. `10.171.49.255`) ve `255.255.255.255`e `{"t":"kesif","v":1}` yollar: ilk 5 sn saniyede bir, sonra arama surdukce 10 sn'de bir. Mac gonderene unicast yanit: `{"t":"kesif.yanit","v":1,"id":"<cihazId>","ad":"<ad>","port":<tcp portu>}`. Duz metin (Bonjour TXT ile ayni bilgi). Gecersiz/bilinmeyen paket yok sayilir. Mac UDP portu acamazsa yalniz NSD kalir.
+- **Bulunan Mac listesi:** telefon NSD + UDP + son adres sonuclarini `id` ile birlestirir (kaynak ve son gorulme zamaniyla); kesif yeniden baslasa da liste silinmez, 60 sn gorulmeyen dusurulur.
+- **Mac tek oturum kurali:** yeni baglanti eski oturumu hemen DUSURMEZ. Yeni baglanti el sikismaya alinir (en cok 1 aday); `hs.pub` sabitlenmis telefon anahtarina esitse (ya da hic eslesme yoksa ve SAS onaylanirsa) eski oturum kapatilir, aday aktif olur. Aday 10 sn icinde dogrulanmazsa kapatilir. Reddedilen baglanti HEMEN kapatilir (beklemede birakilmaz).
+- **Yeniden deneme:** geri cekilme 1/2/5/10/30 sn; ag degisince (ConnectivityManager / hotspot istemcisi degisimi) geri cekilme sifirlanir ve hemen denenir.

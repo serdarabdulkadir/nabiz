@@ -88,7 +88,7 @@ fun Tile(
         modifier.background(c.card, RoundedCornerShape(NabizShape.tile)).padding(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
-        Text(title.uppercase(), style = NabizType.micro, color = c.textSecondary)
+        Text(title.uppercase(java.util.Locale.forLanguageTag("tr")), style = NabizType.micro, color = c.textSecondary)
         AnimatedNumber(value, NabizType.numLarge, c.text, Modifier.align(Alignment.Start))
         if (sub != null) Text(sub, style = NabizType.caption, color = c.textSecondary)
         if (bar != null) {
@@ -130,7 +130,7 @@ fun CoreBars(cores: List<Int>, perf: Int?, eff: Int?) {
 @Composable
 fun SectionLabel(text: String) {
     Text(
-        text.uppercase(), style = NabizType.micro, color = MaterialTheme.nabiz.textSecondary,
+        text.uppercase(java.util.Locale.forLanguageTag("tr")), style = NabizType.micro, color = MaterialTheme.nabiz.textSecondary,
         textAlign = TextAlign.Start, modifier = Modifier.padding(start = Space.lg, top = Space.sm),
     )
 }

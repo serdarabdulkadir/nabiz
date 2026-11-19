@@ -1,7 +1,7 @@
 package com.nabiz.android.peer
 
-/** Yeniden baglanma beklemesi: 2, 5, 15, 30 sn; sonra 30 sn'de bir (protokol bolum 7). Android'e bagimli degil. */
-class ReconnectBackoff(private val stepsMs: LongArray = longArrayOf(2_000, 5_000, 15_000, 30_000)) {
+/** Yeniden baglanma beklemesi: 1, 2, 5, 10, 30 sn; sonra 30 sn'de bir (protokol bolum 11). Android'e bagimli degil. */
+class ReconnectBackoff(private val stepsMs: LongArray = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)) {
     private var index = 0
 
     fun next(): Long {

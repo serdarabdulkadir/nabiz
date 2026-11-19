@@ -1,5 +1,13 @@
 package com.nabiz.android.ui
 
+import androidx.compose.ui.Alignment
+
+import androidx.compose.foundation.layout.height
+
+import androidx.compose.foundation.layout.fillMaxHeight
+
+import androidx.compose.foundation.layout.IntrinsicSize
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +25,8 @@ import com.nabiz.android.peer.LinkPhase
 import com.nabiz.android.peer.LinkReason
 import com.nabiz.android.peer.LinkState
 import com.nabiz.android.peer.LinkVia
+import com.nabiz.android.peer.MacService
+import com.nabiz.android.peer.MacSource
 import com.nabiz.android.service.MacCardModel
 import com.nabiz.android.peer.Snapshot
 import com.nabiz.android.stats.HistoryStore
@@ -36,8 +46,9 @@ fun viaLabel(v: LinkVia): String = if (v == LinkVia.REMOTE) "Uzak (Tailscale)" e
 
 @Composable
 private fun Pair2(a: @Composable (Modifier) -> Unit, b: @Composable (Modifier) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-        a(Modifier.weight(1f)); b(Modifier.weight(1f))
+    // Ayni satirdaki iki karo her zaman esit boyda.
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+        a(Modifier.weight(1f).fillMaxHeight()); b(Modifier.weight(1f).fillMaxHeight())
     }
 }
 
@@ -69,7 +80,7 @@ fun PhoneTab(s: Snapshot?, history: HistoryStore) {
     )
     Pair2(
         { m -> RingTile("Depolama", diskPct?.let { it / 100f }, diskPct?.let { "%$it" } ?: none, levelColor(diskPct, 75, 90), m, detail = disk?.let { Format.bytes(it.used) + " / " + Format.bytes(it.total) }) },
-        { m -> Tile("Ağ", s?.net?.let { "↓ " + Format.rate(it.down) } ?: none, m, sub = s?.net?.let { "↑ " + Format.rate(it.up) }) },
+        { m -> NetTile(s?.net?.down, s?.net?.up, m) },
     )
     Pair2(
         { m -> Tile("Termal", thermalText(s?.thermal), m) },
@@ -84,7 +95,10 @@ fun PhoneTab(s: Snapshot?, history: HistoryStore) {
 }
 
 @Composable
-fun MacTab(link: LinkState, onCmd: (String) -> Unit, history: HistoryStore) {
+fun MacTab(
+    link: LinkState, onCmd: (String) -> Unit, history: HistoryStore,
+    found: List<MacService> = emptyList(), pinnedId: String? = null, onConnect: (String) -> Unit = {}, onRescan: () -> Unit = {},
+) {
     val c = MaterialTheme.nabiz
     val s = link.macSnap
     if (link.phase != LinkPhase.READY && link.reason == LinkReason.SLEEPING) {
@@ -105,6 +119,7 @@ fun MacTab(link: LinkState, onCmd: (String) -> Unit, history: HistoryStore) {
             Text("Mac'te Nabız açık ve aynı Wi-Fi'de olmalı", style = NabizType.rowTitle, color = c.text)
             Text(statusLine(link), style = NabizType.caption, color = c.textSecondary)
         }
+        if (link.phase == LinkPhase.SEARCHING || link.phase == LinkPhase.IDLE) FoundList(found, pinnedId, onConnect, onRescan)
         return
     }
     val cpu = s.cpu
@@ -154,10 +169,59 @@ fun MacTab(link: LinkState, onCmd: (String) -> Unit, history: HistoryStore) {
     }
 }
 
+private fun sourceLabel(s: MacSource) = when (s) {
+    MacSource.LAN -> "Yerel ağ"
+    MacSource.HOTSPOT -> "Hotspot"
+    MacSource.LAST -> "Son adres"
+}
+
+/** Bagli degilken bulunan Mac'ler; dokununca o Mac'e baglanir (pinliyse yalniz pinli Mac). */
+@Composable
+private fun FoundList(found: List<MacService>, pinnedId: String?, onConnect: (String) -> Unit, onRescan: () -> Unit) {
+    val c = MaterialTheme.nabiz
+    SectionLabel("Bulunan Mac'ler")
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(NabizShape.group))) {
+        if (found.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(Space.lg), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Aranıyor…", style = NabizType.rowTitle, color = c.text)
+                Text("Mac ve telefon aynı Wi‑Fi'da ya da Mac telefonun hotspot'unda olmalı", style = NabizType.caption, color = c.textSecondary)
+            }
+        } else found.forEach { m ->
+            val ok = pinnedId == null || pinnedId == m.id
+            Column(
+                Modifier.fillMaxWidth().pressable(0.98f, ok) { onConnect(m.id) }.padding(horizontal = Space.lg, vertical = Space.md),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(m.name, style = NabizType.rowTitle, color = if (ok) c.text else c.textTertiary)
+                Text((m.host.hostAddress ?: "") + ":" + m.port + " · " + sourceLabel(m.source), style = NabizType.caption, color = c.textSecondary)
+            }
+        }
+    }
+    TextButton(onClick = onRescan) { Text("Yeniden ara") }
+}
+
 private fun statusLine(l: LinkState): String = when (l.phase) {
     LinkPhase.IDLE -> "Başlatılıyor"
     LinkPhase.SEARCHING -> reasonText(l.reason, l.peerVersion) ?: "Mac aranıyor…"
     LinkPhase.CONNECTING -> "Bağlanılıyor" + (l.macName?.let { ": $it" } ?: "")
     LinkPhase.AWAIT_SAS -> "Eşleşme kodu onayı bekleniyor"
     LinkPhase.READY -> "Bağlı, ilk veri bekleniyor"
+}
+
+/** Halkali karonun yaninda duran Ag karosu: Mac'teki gibi ortali baslik, ortada iki satir hiz. */
+@Composable
+private fun NetTile(down: Long?, up: Long?, modifier: Modifier) {
+    val c = MaterialTheme.nabiz
+    Column(
+        modifier.background(c.card, RoundedCornerShape(NabizShape.tile)).padding(vertical = Space.md, horizontal = Space.sm),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        Text("AĞ", style = NabizType.micro, color = c.textSecondary)
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("↓ " + (down?.let { Format.rate(it) } ?: none), style = NabizType.rowTitle, color = c.text, maxLines = 1)
+            Text("↑ " + (up?.let { Format.rate(it) } ?: none), style = NabizType.rowTitle, color = c.textSecondary, maxLines = 1)
+        }
+        Text(" ", style = NabizType.caption)
+    }
 }

@@ -31,7 +31,7 @@ fun SparkTile(title: String, points: List<HistoryPoint>, color: Color, modifier:
         modifier.background(c.card, RoundedCornerShape(NabizShape.tile)).padding(Space.lg),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Space.xs),
     ) {
-        Text(title.uppercase(), style = NabizType.micro, color = c.textSecondary)
+        Text(title.uppercase(java.util.Locale.forLanguageTag("tr")), style = NabizType.micro, color = c.textSecondary)
         Canvas(Modifier.fillMaxWidth().height(48.dp)) {
             if (points.size < 2) return@Canvas
             val t0 = points.first().atMs

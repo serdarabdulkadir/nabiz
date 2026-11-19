@@ -18,8 +18,8 @@ android {
         applicationId = "com.nabiz.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.4.1"
     }
 
     // android/keystore.properties (storeFile, storePassword, keyAlias, keyPassword) varsa release ondan imzalanir; yoksa debug anahtari (CI kirilmasin).
