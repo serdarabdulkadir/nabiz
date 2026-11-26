@@ -41,6 +41,10 @@ class PeerSession(
     var peerVersion: Int? = null
         private set
 
+    /** Oturumun okm[0..64) degeri (Aktar veri anahtarlari bundan turetilir, bolum 13); el sikismadan once null. */
+    var sessionKeyMaterial: ByteArray? = null
+        private set
+
     private val frames = PeerFrameBuffer()
     private var sealer: PeerSealer? = null
     private var opener: PeerOpener? = null
@@ -134,6 +138,7 @@ class PeerSession(
             } else {
                 PeerKdf.derive(secret, pub, ownPublic, nonce, ownNonce)
             }
+            sessionKeyMaterial = AktarCrypto.sessionMaterial(keys)
             if (role == PeerRole.MAC) {
                 sealer = PeerSealer(keys.macToPhone); opener = PeerOpener(keys.phoneToMac)
             } else {

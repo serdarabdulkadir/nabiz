@@ -145,9 +145,21 @@ final class PhoneModel {
         refreshLink()
     }
 
+    // MARK: Aktar koprusu (AktarModel kullanir)
+
+    /// Aktif oturumun Aktar anahtar malzemesi (okm[0..64)); oturum yoksa nil.
+    var aktarKeyMaterial: Data? {
+        guard let a = server.slots.active else { return nil }
+        return sessions[a]?.aktarKeyMaterial
+    }
+    /// Aktif oturumdaki telefonun adresi (normallestirilmis).
+    var aktarPeerHost: String? { server.slots.active.flatMap { server.remoteHost(of: $0) } }
+    func sendAktar(_ message: PeerMessage) { send(message) }
+
     /// Aktif oturum bitti (kapandi ya da yenisi devraldi): eski veri yaniltmasin, karolar gosterilmez; son gorulme kalir.
     private func endActiveSession() {
         statsTask?.cancel(); statsTask = nil
+        AktarModel.shared.sessionEnded()
         snapshot = nil
         rtt.reset(); latencyMs = nil
         clearPhoneData()
@@ -248,6 +260,13 @@ final class PhoneModel {
             feed.removed(key)
             AlertCenter.shared.removePhoneNotifications(keys: [key])
         case .notifResult(let key, let result): replyResults[key] = result
+        case .aiSync(let force):
+            // Yenileme bitince (gerekmediyse hemen) ai.state, 10 sn kisitina takilmadan yalniz bu yanit icin.
+            AIStore.shared.sync(force: force) { [weak self] in self?.sendAIState(always: true) }
+        case .aktarTeklif(let t): AktarModel.shared.offerReceived(t)
+        case .aktarYanit(let y): AktarModel.shared.replyReceived(y)
+        case .aktarIptal(let i): AktarModel.shared.cancelReceived(i)
+        case .aktarBitti(let b): AktarModel.shared.doneReceived(b)
         case .callAnswer, .callReject, .callHangup, .callDial, .contactsSync, .callLogSync,
              .notifDismiss, .notifClear, .notifReply, .aiState: break   // mac->tel yonu; telefondan gelmez
         case .stats(let s):
@@ -379,8 +398,9 @@ final class PhoneModel {
         if let last = lastAISent, Date().timeIntervalSince(last.at) < 10 {
             guard !aiPendingSend else { return }
             aiPendingSend = true
+            let wait = max(0.5, 10 - Date().timeIntervalSince(last.at))
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(wait))
                 self?.aiPendingSend = false
                 self?.sendAIState()
             }
@@ -389,10 +409,11 @@ final class PhoneModel {
         sendAIState()
     }
 
-    private func sendAIState() {
+    /// `always`: ai.sync yaniti; icerik ayniysa da yollanir (telefon "yenileniyor" gostergesini kapatir).
+    private func sendAIState(always: Bool = false) {
         guard link == .bagli else { return }
         let providers = AIStore.shared.wireProviders()
-        if let last = lastAISent, last.providers == providers { return }
+        if !always, let last = lastAISent, last.providers == providers { return }
         lastAISent = (Date(), providers)
         send(.aiState(providers))
     }

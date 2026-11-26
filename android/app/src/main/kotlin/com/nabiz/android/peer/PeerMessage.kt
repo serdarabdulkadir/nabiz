@@ -99,6 +99,22 @@ sealed class PeerMessage {
     data class NotifReply(val anahtar: String, val metin: String, override val id: Long? = null) : PeerMessage()
     data class NotifResult(val anahtar: String, val sonuc: String, override val id: Long? = null) : PeerMessage()
     data class AiState(val saglayicilar: List<AiProvider>, override val id: Long? = null) : PeerMessage()
+    /** tel->mac: AI verisini yenilet (bolum 12); `zorla`: gercek yenileme (Mac en cok 15 sn'de bir uygular). */
+    data class AiSync(val zorla: Boolean = false, override val id: Long? = null) : PeerMessage()
+
+    // --- Bolum 13: Aktar (kontrol kanali) ---
+    data class AktarTeklif(
+        val aid: String, val dosyalar: List<AktarFile>, val toplam: Long, val port: Int? = null, override val id: Long? = null,
+    ) : PeerMessage()
+    /** `neden`: reddedildi / yer_yok / kapali (yalniz kabul:false iken). */
+    data class AktarYanit(
+        val aid: String, val kabul: Boolean, val neden: String? = null, val port: Int? = null, override val id: Long? = null,
+    ) : PeerMessage()
+    data class AktarIptal(val aid: String, override val id: Long? = null) : PeerMessage()
+    /** `sonuc`: tamam / hata; `hatali`: dogrulanamayan fid'ler. */
+    data class AktarBitti(
+        val aid: String, val sonuc: String, val hatali: List<Int> = emptyList(), override val id: Long? = null,
+    ) : PeerMessage()
 }
 
 object PeerCodec {
@@ -159,6 +175,21 @@ object PeerCodec {
             is PeerMessage.NotifReply -> { out["t"] = "notif.reply"; out["anahtar"] = m.anahtar; out["metin"] = m.metin }
             is PeerMessage.NotifResult -> { out["t"] = "notif.result"; out["anahtar"] = m.anahtar; out["sonuc"] = m.sonuc }
             is PeerMessage.AiState -> { out["t"] = "ai.state"; out["saglayicilar"] = m.saglayicilar.map { PhoneCodec.aiMap(it) } }
+            is PeerMessage.AiSync -> { out["t"] = "ai.sync"; if (m.zorla) out["zorla"] = true }
+            is PeerMessage.AktarTeklif -> {
+                out["t"] = "aktar.teklif"; out["aid"] = m.aid
+                out["dosyalar"] = m.dosyalar.map { AktarCodec.fileMap(it) }; out["toplam"] = m.toplam
+                put("port", m.port)
+            }
+            is PeerMessage.AktarYanit -> {
+                out["t"] = "aktar.yanit"; out["aid"] = m.aid; out["kabul"] = m.kabul
+                put("neden", m.neden); put("port", m.port)
+            }
+            is PeerMessage.AktarIptal -> { out["t"] = "aktar.iptal"; out["aid"] = m.aid }
+            is PeerMessage.AktarBitti -> {
+                out["t"] = "aktar.bitti"; out["aid"] = m.aid; out["sonuc"] = m.sonuc
+                if (m.hatali.isNotEmpty()) out["hatali"] = m.hatali
+            }
         }
         return out
     }
@@ -208,6 +239,13 @@ object PeerCodec {
             "notif.result" -> PeerMessage.NotifResult(o.str("anahtar"), o.str("sonuc"), id)
             "ai.state" -> PeerMessage.AiState(
                 o.listOpt("saglayicilar").orEmpty().map { PhoneCodec.ai(Fields(it as? Map<*, *> ?: throw PeerProtocolException("saglayici nesne degil"))) }, id,
+            )
+            "ai.sync" -> PeerMessage.AiSync(o.boolOpt("zorla"), id)
+            "aktar.teklif" -> PeerMessage.AktarTeklif(o.str("aid"), AktarCodec.files(o.listOpt("dosyalar")), o.long("toplam"), o.intOpt("port"), id)
+            "aktar.yanit" -> PeerMessage.AktarYanit(o.str("aid"), o.bool("kabul"), o.strOpt("neden"), o.intOpt("port"), id)
+            "aktar.iptal" -> PeerMessage.AktarIptal(o.str("aid"), id)
+            "aktar.bitti" -> PeerMessage.AktarBitti(
+                o.str("aid"), o.str("sonuc"), o.listOpt("hatali").orEmpty().mapNotNull { (it as? Number)?.toInt() }, id,
             )
             else -> PeerMessage.Unknown(t, id)
         }

@@ -564,6 +564,8 @@ private struct PhoneSettings: View {
                           key: SettingsKey.phoneCallBubble, defaultOn: true)
             }
             Footnote(text: "Bildirim, arama ve kişi paylaşımı telefonda Ayarlar > Mac ile paylaş bölümünden açılır.")
+            SectionTitle(text: "Aktar (dosya aktarımı)")
+            AktarSettingsBox()
             SectionTitle(text: "Uzak bağlantı")
             RemoteAccessBox()
             SectionTitle(text: "Telefondan komutlar")
@@ -582,6 +584,35 @@ private struct PhoneSettings: View {
             }
             Footnote(text: "Kapalı komutlar telefona \"kapalı\" yanıtı döner.")
         }
+    }
+}
+
+private struct AktarSettingsBox: View {
+    @AppStorage(SettingsKey.aktarFolder) private var folder = ""
+
+    private var shownFolder: String {
+        let path = folder.isEmpty ? AktarModel.defaultFolder.path : folder
+        return (path as NSString).abbreviatingWithTildeInPath
+    }
+
+    var body: some View {
+        Box {
+            ToggleRow(symbol: "arrow.up.arrow.down", title: "Aktar'ı aç",
+                      subtitle: "Telefonla dosya gönder ve al. Kapalıyken gelen teklifler reddedilir.",
+                      key: SettingsKey.aktarOn, defaultOn: true)
+            RowDivider()
+            Row(symbol: "folder", title: "Kayıt konumu", subtitle: shownFolder) {
+                HStack(spacing: 8) {
+                    if !folder.isEmpty { Button("Varsayılan") { folder = "" } }
+                    Button("Seç") { AktarModel.shared.pickFolder() }
+                }
+            }
+            RowDivider()
+            ToggleRow(symbol: "checkmark.circle", title: "Eşleşmiş telefondan otomatik kabul",
+                      subtitle: "Açıkken gelen dosyalar sormadan kaydedilir.",
+                      key: SettingsKey.aktarAuto, defaultOn: false)
+        }
+        Footnote(text: "Aynı ada sahip dosya varsa adın sonuna (2) eklenir. Dosyalar aynen, değişme tarihi korunarak kaydedilir.")
     }
 }
 

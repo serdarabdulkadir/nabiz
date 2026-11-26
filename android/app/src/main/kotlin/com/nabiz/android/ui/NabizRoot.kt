@@ -1,6 +1,8 @@
 package com.nabiz.android.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
@@ -25,7 +27,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,6 +55,7 @@ import com.nabiz.android.ui.theme.Space
 import com.nabiz.android.ui.theme.nabiz
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainViewModel = viewModel()) {
     val link by vm.link.collectAsStateWithLifecycle()
@@ -58,6 +63,13 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
     val pinned by vm.pinned.collectAsStateWithLifecycle()
     val found by vm.found.collectAsStateWithLifecycle()
     val ai by vm.ai.collectAsStateWithLifecycle()
+    val aiSyncing by vm.aiSyncing.collectAsStateWithLifecycle()
+    val transfers by vm.transfers.collectAsStateWithLifecycle()
+    val aktarOn by vm.aktarEnabled.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) com.nabiz.android.aktar.AktarService.send(ctx, uris)
+    }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settings by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -69,10 +81,18 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
         }
     }
     LaunchedEffect(requestedTab) {
-        if (requestedTab in 0..1) { tab = requestedTab; settings = false; onTabHandled() }
+        if (requestedTab in 0..2) { tab = requestedTab; settings = false; onTabHandled() }
     }
-    // AI sekmesi yalniz son ai.state'te saglayici varken var; yoksa Mac'e donulur.
-    LaunchedEffect(ai.isNotEmpty()) { if (ai.isEmpty() && tab == 2) tab = 1 }
+    // AI sekmesi (4.) yalniz son ai.state'te saglayici varken var; yoksa Mac'e donulur.
+    LaunchedEffect(ai.isNotEmpty()) { if (ai.isEmpty() && tab == 3) tab = 1 }
+    // AI sekmesi gorunurken (ekran acik, bagli) Mac'ten yenileme iste: acilinca ve 60 sn'de bir.
+    val aiVisible = tab == 3 && ai.isNotEmpty() && !settings && link.phase == LinkPhase.READY
+    LaunchedEffect(aiVisible, lifecycle) {
+        if (!aiVisible) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { vm.aiSync(false); delay(60_000) }
+        }
+    }
     BackHandler(enabled = settings) { settings = false }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.nabiz.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -102,12 +122,17 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                             )
                         }
                         Segmented(
-                            listOf("Telefon", "Mac" + (link.rttMs?.takeIf { link.phase == LinkPhase.READY }?.let { " · $it ms" } ?: "")) + (if (ai.isNotEmpty()) listOf("AI") else emptyList()),
-                            tab.coerceAtMost(if (ai.isNotEmpty()) 2 else 1), { tab = it },
+                            listOf("Telefon", "Mac" + (link.rttMs?.takeIf { link.phase == LinkPhase.READY }?.let { " · $it ms" } ?: ""), "Aktar") + (if (ai.isNotEmpty()) listOf("AI") else emptyList()),
+                            tab.coerceAtMost(if (ai.isNotEmpty()) 3 else 2), { tab = it },
                         )
                     }
+                    PullToRefreshBox(
+                        isRefreshing = aiSyncing && tab == 3,
+                        onRefresh = { if (tab == 3 && ai.isNotEmpty()) vm.aiSync(true) },
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    ) {
                     Column(
-                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.lg),
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.lg),
                         verticalArrangement = Arrangement.spacedBy(Space.md),
                     ) {
                         AnimatedContent(
@@ -122,10 +147,11 @@ fun NabizRoot(requestedTab: Int = -1, onTabHandled: () -> Unit = {}, vm: MainVie
                             label = "tab",
                         ) { t ->
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                                if (t == 0) PhoneTab(phone, vm.history) else if (t == 2 && ai.isNotEmpty()) AiTab(ai) else MacTab(link, vm::sendCmd, vm.history, found, pinned?.id, vm::connectTo, vm::rescan)
+                                if (t == 0) PhoneTab(phone, vm.history) else if (t == 2) AktarTab(link, aktarOn, transfers, { picker.launch(arrayOf("*/*")) }, vm::aktarCancel, vm::aktarAccept, vm::aktarReject) else if (t == 3 && ai.isNotEmpty()) AiTab(ai, aiSyncing) else MacTab(link, vm::sendCmd, vm.history, found, pinned?.id, vm::connectTo, vm::rescan)
                             }
                         }
                         Spacer(Modifier.height(Space.xl))
+                    }
                     }
                 }
             }

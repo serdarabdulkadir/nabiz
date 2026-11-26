@@ -68,6 +68,7 @@ public struct PeerSession: Sendable {
     private let localNonce: Data
     private var buffer = PeerFrameBuffer()
     private var cipher: PeerCipher?
+    private var sessionKeys: PeerSessionKeys?
     private var peerKey = Data()
     private var peerName = ""
     private var held: [PeerEnvelope] = []
@@ -121,6 +122,13 @@ public struct PeerSession: Sendable {
         return out
     }
 
+    /// Aktar veri baglantisi anahtarlari icin oturum malzemesi: `okm[0..64)` = macToPhone || phoneToMac
+    /// (docs/protokol.md bolum 13). Yalniz kurulu oturumda; aksi halde nil.
+    public var aktarKeyMaterial: Data? {
+        guard state == .kurulu, let k = sessionKeys else { return nil }
+        return k.macToPhone.withUnsafeBytes { Data($0) } + k.phoneToMac.withUnsafeBytes { Data($0) }
+    }
+
     /// Kurulu oturumda mesaj gonderir; cerceveli bayt dondurur.
     public mutating func send(_ envelope: PeerEnvelope) throws -> Data {
         guard state == .kurulu else { throw PeerSessionError.yanlisDurum }
@@ -135,7 +143,7 @@ public struct PeerSession: Sendable {
     // MARK: Ic
 
     private mutating func fail(_ error: PeerSessionError) -> PeerSessionOutput {
-        state = .kapali; cipher = nil; held = []
+        state = .kapali; cipher = nil; sessionKeys = nil; held = []
         var out = PeerSessionOutput()
         out.events.append(.kapandi(error))
         return out
@@ -174,6 +182,7 @@ public struct PeerSession: Sendable {
                 macNonce: role == .mac ? localNonce : nonce,
                 phoneNonce: role == .mac ? nonce : localNonce)
             cipher = PeerCipher(role: role, keys: keys)
+            sessionKeys = keys
             peerKey = pub; peerName = hs.ad
             if pinnedPeerKey != nil {
                 establish(into: &out)

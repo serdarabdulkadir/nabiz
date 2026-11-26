@@ -151,6 +151,9 @@ final class PeerServer {
         conns[id]?.send(content: data, completion: .contentProcessed { _ in })
     }
 
+    /// Baglanan tarafin adresi (Aktar veri baglantisini ayni cihaza baglamak icin); bilinmiyorsa nil.
+    func remoteHost(of id: Int) -> String? { conns[id].flatMap { aktarHost(of: $0.endpoint) } }
+
     func close(_ id: Int) { connectionEnded(id) }
 
     func closeAll() { for id in Array(conns.keys) { connectionEnded(id) } }

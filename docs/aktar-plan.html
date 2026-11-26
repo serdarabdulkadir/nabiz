@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nabız Aktar planı</title>
+<style>
+/* VOICE work: a product plan read like an Apple feature page, calm and exact
+   IDEA the AirDrop sheet itself: nearby devices as round avatars, a progress ring around the one receiving
+   PICTURE three real mock-ups side by side: Mac menu panel, Android share sheet, browser page for any OS
+   COLOUR Nabız tokens: near-black glass, system blue accent, green for done, orange for waiting
+   TYPE system SF stack (-apple-system), rounded digits for numbers
+   LAYOUT title + one-line verdict, then the three screens in a row (stacked on phone), then route, decisions, phases */
+:root{color-scheme:light dark;--bg:light-dark(#f5f5f7,#000);--ink:light-dark(#1d1d1f,#f5f5f7);--sub:light-dark(#6e6e73,#a1a1a6);--card:light-dark(#fff,#1c1c1e);--line:light-dark(#d2d2d7,#38383a);--blue:#0a84ff;--green:#30d158;--orange:#ff9f0a;--glass:rgba(40,40,44,.72)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased}
+.band{padding:clamp(28px,4vw,64px) max(5vw,16px)}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font:700 clamp(34px,5vw,52px)/1.05 -apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.025em;margin:0 0 14px;text-wrap:balance}
+h2{font:700 clamp(26px,3vw,34px)/1.1 -apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+h3{font-size:19px;margin:0 0 6px;letter-spacing:-.01em}
+.lead{font-size:clamp(18px,2vw,21px);color:var(--sub);max-width:62ch;margin:0}
+.lead b{color:var(--ink);font-weight:600}
+p{margin:0 0 10px}
+.small{font-size:14px;color:var(--sub)}
+.stage{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.8fr) minmax(0,1fr);gap:22px;margin-top:36px;align-items:end}
+.cap{font-size:14px;color:var(--sub);margin-top:12px;text-align:center}
+.cap b{color:var(--ink);font-weight:600}
+/* Mac panel */
+.desk{background:linear-gradient(160deg,#2b3a55,#141824 60%,#0b0d12);border-radius:22px;padding:18px 18px 22px;position:relative}
+.mbar{height:24px;display:flex;justify-content:flex-end;gap:14px;align-items:center;color:#fff;font-size:12px;opacity:.9;margin-bottom:8px}
+.mbar .on{background:rgba(255,255,255,.22);border-radius:6px;padding:1px 7px}
+.panel{background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);border:1px solid rgba(255,255,255,.12);border-radius:30px;padding:12px;color:#f5f5f7;max-width:344px;margin-left:auto;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.pill{display:flex;background:rgba(255,255,255,.08);border-radius:99px;padding:3px;font-size:13px;font-weight:600}
+.pill span{flex:1;text-align:center;padding:6px 0;border-radius:99px;color:#a1a1a6}
+.pill .sel{background:rgba(255,255,255,.18);color:#fff}
+.drop{margin-top:12px;border:1.5px dashed rgba(255,255,255,.25);border-radius:22px;padding:14px 12px 12px;text-align:center}
+.drop .hint{font-size:12px;color:#a1a1a6;margin-top:10px}
+.devs{display:flex;justify-content:space-around;gap:6px}
+.dev{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;line-height:1.2;color:#e5e5ea;width:76px;text-align:center}
+.av{width:58px;height:58px;border-radius:50%;background:linear-gradient(180deg,#5e5e66,#3a3a40);display:grid;place-items:center;position:relative}
+.av svg.g{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.av svg.r{position:absolute;inset:-5px;width:68px;height:68px;transform:rotate(-90deg)}
+.dev small{color:#a1a1a6;font-size:11px}
+.row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border-radius:16px;padding:10px 12px;margin-top:10px;font-size:13px}
+.thumb{width:36px;height:36px;border-radius:9px;flex:none;background:linear-gradient(135deg,#ff9f0a,#ff375f)}
+.thumb.v{background:linear-gradient(135deg,#64d2ff,#0a84ff)}
+.row .t{flex:1}.row .t small{display:block;color:#a1a1a6;font-size:11.5px}
+.bar{height:4px;border-radius:4px;background:rgba(255,255,255,.12);margin-top:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--blue);border-radius:4px}
+.ok{color:var(--green);font-weight:600;white-space:nowrap}
+/* Android sheet */
+.phone{background:#000;border-radius:38px;padding:9px;max-width:270px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.35);border:1px solid #333}
+.screen{background:linear-gradient(180deg,#3a2f2a,#1a1512);border-radius:30px;height:480px;position:relative;overflow:hidden;color:#f5f5f7}
+.sb{display:flex;justify-content:space-between;font-size:11px;padding:10px 20px;opacity:.9}
+.photo{position:absolute;inset:34px 0 auto;height:200px;background:linear-gradient(160deg,#ffb36b,#c2410c 55%,#431407)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#1c1c1e;border-radius:26px 26px 0 0;padding:10px 14px 16px}
+.grab{width:36px;height:4px;border-radius:4px;background:#48484a;margin:0 auto 10px}
+.sheet h4{margin:0 0 2px;font-size:15px}.sheet .small{font-size:12px;margin-bottom:12px}
+.sheet .devs{justify-content:flex-start;gap:4px;margin-bottom:12px}
+.apps{display:flex;gap:10px;border-top:1px solid #2c2c2e;padding-top:12px;font-size:11px;color:#a1a1a6}
+.apps div{display:flex;flex-direction:column;align-items:center;gap:5px;width:52px}
+.apps i{width:40px;height:40px;border-radius:12px;background:#2c2c2e;display:block}
+/* browser */
+.win{background:var(--card);border-radius:14px;border:1px solid var(--line);overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.tb{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:light-dark(#ececee,#2c2c2e)}
+.dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.dots i+i{background:#febc2e}.dots i+i+i{background:#28c840}
+.url{flex:1;font-size:12px;color:var(--sub);background:var(--card);border-radius:7px;padding:4px 10px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.web{padding:22px 20px 20px;text-align:center}
+.web .av{margin:0 auto 10px;width:64px;height:64px}
+.web h4{margin:0;font-size:18px}
+.web .small{margin:2px 0 16px}
+.zone{border:1.5px dashed var(--line);border-radius:18px;padding:22px 12px;font-size:14px;color:var(--sub)}
+.zone b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+.btn{display:inline-block;margin-top:12px;background:var(--blue);color:#fff;border-radius:99px;padding:10px 22px;font-weight:600;font-size:15px}
+.recv{margin-top:14px;text-align:left;border-top:1px solid var(--line);padding-top:10px;font-size:13px}
+.recv div{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.recv span:last-child{color:var(--blue);white-space:nowrap}
+/* sections */
+.alt{background:var(--card)}
+.routes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:24px}
+.route{border-radius:22px;padding:22px;background:var(--bg);border:1px solid var(--line)}
+.alt .route{background:var(--bg)}
+.route .tag{display:inline-block;font-size:13px;font-weight:600;border-radius:99px;padding:3px 10px;margin-bottom:12px;color:#fff;background:#0062cc}
+.route .tag.g{background:#248a3d}.route .tag.o{background:#c93400}
+.route ul{margin:10px 0 0;padding-left:18px;font-size:15px}.route li{margin-bottom:5px}
+.path{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:6px 0 4px;flex-wrap:wrap}
+.path i{flex:1;min-width:18px;height:2px;background:var(--line)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px}
+.checks{list-style:none;padding:0;margin:14px 0 0}
+.checks li{padding:12px 0 12px 32px;border-bottom:1px solid var(--line);position:relative;font-size:16px}
+.checks li::before{content:"";position:absolute;left:2px;top:15px;width:18px;height:18px;border-radius:50%;background:var(--green);-webkit-mask:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18"><circle cx="9" cy="9" r="9"/></svg>')}
+.checks li::after{content:"";position:absolute;left:8px;top:19px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.checks b{font-weight:600}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:16px}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:13px;color:var(--sub);font-weight:600}
+td:first-child{font-weight:600;width:22%}
+.rec{color:#248a3d;font-weight:600}
+:root[data-theme=dark] .rec{color:var(--green)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .rec{color:var(--green)}}
+.phases{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}
+.ph{border-radius:20px;padding:18px;background:var(--card);border:1px solid var(--line)}
+.ph .n{font-size:13px;color:var(--sub);font-weight:600}
+.ph h3{margin-top:4px}
+.ph p{font-size:15px;color:var(--sub);margin:0}
+.ph .cost{margin-top:10px;font-size:13px;font-weight:600;color:var(--ink)}
+code{font:14px ui-monospace,"SF Mono",Menlo,monospace;background:light-dark(#e8e8ed,#2c2c2e);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+@media(max-width:980px){.stage{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.stage>.c3{grid-column:1/-1;max-width:460px;margin:0 auto;width:100%}.phases{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.stage,.routes,.grid2,.phases{grid-template-columns:minmax(0,1fr)}.grid2{gap:20px}}
+@media(max-width:600px){table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:block;border:0;padding:3px 0;width:auto}.stack td::before{content:attr(data-l);display:block;font-size:12px;color:var(--sub);font-weight:600}}
+@media (prefers-reduced-motion:no-preference){.spin{animation:fill 2.6s ease-in-out infinite alternate}@keyframes fill{from{stroke-dashoffset:150}to{stroke-dashoffset:40}}}
+</style>
+</head>
+<body>
+
+<section class="band"><div class="wrap">
+  <h1>Nabız Aktar: her cihaza AirDrop gibi gönder</h1>
+  <p class="lead"><b>Yakındaki cihazlar bir sırada görünür, dokun ve gönder; fotoğraf ve video asla sıkıştırılmaz.</b> Mac ile Android arasında mevcut şifreli Nabız kanalı kullanılır. Uygulaması olmayan cihazlar (iPhone, Windows, Linux) tarayıcıdan, sonraki fazda LocalSend uygulamasından katılır.</p>
+
+  <div class="stage">
+    <div>
+      <div class="desk">
+        <div class="mbar"><span>CPU 18%</span><span class="on">Nabız</span><span>14:32</span></div>
+        <div class="panel">
+          <div class="pill"><span>Bu Mac</span><span>Telefon</span><span class="sel">Aktar</span></div>
+          <div class="drop">
+            <div class="devs" id="macdevs"></div>
+            <div class="hint">Dosyayı buraya ya da menü çubuğu simgesine bırak</div>
+          </div>
+          <div class="row"><div class="thumb v"></div><div class="t">IMG_4471.MOV<small>Redmi Note 13 Pro'ya · 2,1 GB / 3,4 GB · 48 MB/sn</small><div class="bar"><i style="width:62%"></i></div></div></div>
+          <div class="row"><div class="thumb"></div><div class="t">12 fotoğraf<small>Redmi'den geldi · İndirilenler/Nabız</small></div><span class="ok">Bitti</span></div>
+        </div>
+      </div>
+      <p class="cap"><b>Mac:</b> panelde yeni Aktar sekmesi</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>14:32</span><span>5G · 82%</span></div>
+        <div class="photo"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <h4>3 öğe paylaş</h4>
+          <div class="small">Orijinal kalite · 184 MB</div>
+          <div class="devs" id="phonedevs"></div>
+          <div class="apps"><div><i></i>WhatsApp</div><div><i></i>Drive</div><div><i></i>Gmail</div><div><i></i>Daha</div></div>
+        </div>
+      </div></div>
+      <p class="cap"><b>Android:</b> Galeri'den Paylaş, Nabız kişi gibi görünür</p>
+    </div>
+
+    <div class="c3">
+      <div class="win">
+        <div class="tb"><div class="dots"><i></i><i></i><i></i></div><div class="url">192.168.1.24:47823 · Nabız</div></div>
+        <div class="web">
+          <div class="av" id="webav"></div>
+          <h4>Abdulkadir'in MacBook Air'i</h4>
+          <div class="small">Bu tarayıcı bağlandı · Mac'te onaylandı</div>
+          <div class="zone"><b>Dosyaları sürükle</b>ya da seç: fotoğraf, video, her tür dosya</div>
+          <span class="btn">Dosya seç</span>
+          <div class="recv"><div><span>Sunum.key · 86 MB</span><span>İndir</span></div><div><span>Mac'ten 4 fotoğraf</span><span>Tümünü indir</span></div></div>
+        </div>
+      </div>
+      <p class="cap"><b>iPhone, Windows, Linux:</b> QR'ı okut, tarayıcıda aç; kurulum yok</p>
+    </div>
+  </div>
+  <p class="small" style="margin-top:18px">Ekranlar taslaktır; ölçüler ve renkler Nabız token'larından (köşe 22/18/16, cam panel, sistem mavisi) gelir.</p>
+</div></section>
+
+<section class="band alt"><div class="wrap">
+  <h2>Üç yol, tek arayüz</h2>
+  <p class="lead">Kullanıcı hangi yoldan gittiğini görmez: hepsi aynı cihaz sırasında bir yuvarlak olarak çıkar.</p>
+  <div class="routes">
+    <div class="route">
+      <span class="tag">Faz 1 · Nabız ↔ Nabız</span>
+      <div class="path">Mac <i></i> Android</div>
+      <ul>
+        <li>Komut ve onay mevcut kanaldan (<code>aktar.teklif</code>, <code>aktar.yanit</code>), veri ayrı TCP bağlantısından: durum akışı tıkanmaz.</li>
+        <li>Eşleşme anahtarından türetilen dosya anahtarı, AES-256-GCM, 1 MB parçalar.</li>
+        <li>Kopunca kaldığı yerden devam, sonda SHA-256 kontrolü.</li>
+        <li>Aynı Wi-Fi'da 30-60 MB/sn beklenir (5 GHz); hotspot'ta daha az.</li>
+      </ul>
+    </div>
+    <div class="route">
+      <span class="tag g">Faz 2 · Tarayıcı</span>
+      <div class="path">Mac / telefon <i></i> herhangi bir tarayıcı</div>
+      <ul>
+        <li>Nabız küçük bir yerel web sayfası açar; QR kodu tek kullanımlık anahtar taşır.</li>
+        <li>Her yeni tarayıcı Mac'te (ya da telefonda) "İzin ver" ile onaylanır.</li>
+        <li>İki yön: tarayıcıdan gönder, tarayıcıya indir.</li>
+        <li>iPhone'da "Dosyalar"dan seçilen orijinal kalır; Fotoğraflar seçicisi bazen HEIC'i JPEG'e çevirir, sayfada not edilir.</li>
+      </ul>
+    </div>
+    <div class="route">
+      <span class="tag o">Faz 3 · LocalSend uyumu</span>
+      <div class="path">Nabız <i></i> LocalSend (Win, Linux, iOS)</div>
+      <ul>
+        <li>LocalSend açık kaynak (MIT) ve protokolü yayımlı; uygulaması her işletim sisteminde var.</li>
+        <li>Nabız bu protokolü de konuşursa, LocalSend kurulu her cihaz cihaz sırasında görünür.</li>
+        <li>Windows/Linux için ayrı Nabız uygulaması yazmadan yerel hız ve arka planda alma.</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap grid2">
+  <div>
+    <h2>Kalite kuralları</h2>
+    <p class="lead">AirDrop'tan beklenen her şey, işletim sistemi fark etmeden.</p>
+    <ul class="checks">
+      <li><b>Bayt bayt aynı dosya.</b> Yeniden kodlama yok; HEIC, ProRAW, 4K/HDR video, RAW olduğu gibi gider.</li>
+      <li><b>Bilgiler korunur.</b> EXIF, konum, çekim tarihi kalır; telefonda Galeri'de doğru tarihte görünür.</li>
+      <li><b>Doğrulama.</b> Her dosya SHA-256 ile kontrol edilir; bozuk parça yeniden istenir.</li>
+      <li><b>Büyük dosya.</b> Boyut sınırı yok, disk yer kontrolü baştan yapılır; kopmada devam.</li>
+      <li><b>Bulut yok.</b> Veri yalnız yerel ağda ya da Tailscale'de dolaşır.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Akış</h2>
+    <ul class="checks">
+      <li><b>Gönder:</b> Mac'te menü simgesine sürükle, Finder Paylaş menüsü ya da panel; Android'de Paylaş sayfası.</li>
+      <li><b>Al:</b> "Redmi 3 fotoğraf göndermek istiyor" bildirimi, Reddet / Kabul et.</li>
+      <li><b>Eşleşmiş cihaz</b> isteğe bağlı otomatik kabul (Ayarlar'da tek anahtar).</li>
+      <li><b>Nereye:</b> Mac'te İndirilenler/Nabız (Ayarlar'dan değişir); Android'de fotoğraf/video Galeri'ye, diğerleri İndirilenler/Nabız'a.</li>
+      <li><b>Bitince:</b> Mac'te Finder'da göster, telefonda dokun ve aç.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section class="band alt"><div class="wrap">
+  <h2>Senin kararın gereken üç nokta</h2>
+  <p class="lead">Önerilen seçenek yeşil; değiştirmezsen bununla başlanır.</p>
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Karar</th><th>Öneri</th><th>Diğer seçenek</th><th>Neden</th></tr></thead>
+    <tbody>
+      <tr><td data-l="Karar">Diğer işletim sistemleri</td><td data-l="Öneri" class="rec">Önce tarayıcı, sonra LocalSend uyumu</td><td data-l="Diğer seçenek">Windows/Linux için ayrı Nabız uygulaması</td><td data-l="Neden">Ayrı uygulama 2-3 kat iş ve bakım; tarayıcı kurulumsuz, LocalSend hazır istemci.</td></tr>
+      <tr><td data-l="Karar">Tarayıcı yolunda şifre</td><td data-l="Öneri" class="rec">Anahtar QR'da, sayfa içinde şifreleme</td><td data-l="Diğer seçenek">Kendinden imzalı HTTPS</td><td data-l="Neden">HTTPS sertifika uyarısı gösterir (Apple vari değil); QR'daki anahtar, ağdakilere karşı yeterli koruma.</td></tr>
+      <tr><td data-l="Karar">Eşleşmiş cihazdan gelen</td><td data-l="Öneri" class="rec">Sor (Kabul et / Reddet), otomatik kabul ayarda</td><td data-l="Diğer seçenek">Hep otomatik kabul</td><td data-l="Neden">AirDrop gibi güvenli varsayılan; kendi cihazları arasında isteyen açar.</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>Yol haritası</h2>
+  <p class="lead">Her faz tek başına kullanılabilir ve ayrı sürüm olarak yayımlanır.</p>
+  <div class="phases">
+    <div class="ph"><div class="n">0.6.0</div><h3>Mac ↔ Android</h3><p>Protokol bölüm 13, veri kanalı, Aktar sekmesi, Android paylaş hedefi, alma bildirimi, Galeri'ye kayıt.</p><div class="cost">2-3 oturum</div></div>
+    <div class="ph"><div class="n">0.7.0</div><h3>Tarayıcı</h3><p>Mac'te yerel web sayfası + QR, onay, iki yön; sonra telefonda da aynı sayfa.</p><div class="cost">1-2 oturum</div></div>
+    <div class="ph"><div class="n">0.8.0</div><h3>LocalSend</h3><p>Çoklu yayın keşfi ve HTTPS uçları; Windows ve iPhone'da cihazda deneme.</p><div class="cost">1-2 oturum</div></div>
+    <div class="ph"><div class="n">Sonra</div><h3>Cila</h3><p>Finder Paylaş uzantısı, Android Direct Share kısayolu, pano ve bağlantı (URL) gönderme.</p><div class="cost">1 oturum</div></div>
+  </div>
+  <p class="small" style="margin-top:18px">Süreler önceki Nabız oturumlarına göre tahmin. Hız rakamları Wi-Fi 5/6 tipik aralığıdır, cihazda ölçülecek.</p>
+</div></section>
+
+<script>
+{
+const G={
+  mac:'<path d="M4 6h16v10H4z"/><path d="M2 19h20"/>',
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  pc:'<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>',
+  iphone:'<rect x="7" y="2.5" width="10" height="19" rx="3"/><path d="M10.5 4.5h3"/>'
+};
+const av=(g,ring)=>'<div class="av"><svg class="g" viewBox="0 0 24 24">'+G[g]+'</svg>'+(ring?'<svg class="r" viewBox="0 0 68 68"><circle cx="34" cy="34" r="31" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="3"/><circle class="spin" cx="34" cy="34" r="31" fill="none" stroke="#0a84ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="195" stroke-dashoffset="74"/></svg>':'')+'</div>';
+const dev=(g,n,s,ring)=>'<div class="dev">'+av(g,ring)+'<span>'+n+'<br><small>'+s+'</small></span></div>';
+document.getElementById('macdevs').innerHTML=dev('phone','Redmi Note 13 Pro','Gönderiliyor',true)+dev('pc','Ofis PC','LocalSend')+dev('iphone','iPhone','Tarayıcı');
+document.getElementById('phonedevs').innerHTML=dev('mac','MacBook Air','Nabız')+dev('pc','Ofis PC','LocalSend');
+document.getElementById('webav').innerHTML='<svg class="g" viewBox="0 0 24 24">'+G.mac+'</svg>';
+}
+</script>
+</body>
+</html>

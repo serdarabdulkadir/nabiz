@@ -29,14 +29,18 @@ public struct PeerFrameBuffer: Sendable {
     public mutating func append(_ data: Data) throws -> [Data] {
         buffer.append(data)
         var frames: [Data] = []
-        while buffer.count >= 4 {
-            let s = buffer.startIndex
-            let len = (Int(buffer[s]) << 24) | (Int(buffer[s + 1]) << 16) | (Int(buffer[s + 2]) << 8) | Int(buffer[s + 3])
+        // Tampon basi `head` ile ilerler; kalan bayt cerceve basina degil, cagri basina bir kez tasinir.
+        var head = buffer.startIndex
+        while buffer.endIndex - head >= 4 {
+            let len = (Int(buffer[head]) << 24) | (Int(buffer[head + 1]) << 16) | (Int(buffer[head + 2]) << 8) | Int(buffer[head + 3])
             if len == 0 { throw PeerFrameError.bosCerceve }
             if len > PeerFrame.maxPayload { throw PeerFrameError.cokBuyuk(len) }
-            guard buffer.count >= 4 + len else { break }
-            frames.append(Data(buffer[(s + 4)..<(s + 4 + len)]))
-            buffer = Data(buffer[(s + 4 + len)...])
+            guard buffer.endIndex - head >= 4 + len else { break }
+            frames.append(Data(buffer[(head + 4)..<(head + 4 + len)]))
+            head += 4 + len
+        }
+        if head > buffer.startIndex {
+            buffer = head == buffer.endIndex ? Data() : Data(buffer[head...])
         }
         return frames
     }

@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- connectedDevice servisi icin Android 14+ on kosulu: NEARBY_WIFI_DEVICES verilmese de normal izin yeter. -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <!-- Aktar: dosya aktarimi suresince dataSync on plan servisi. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Mac ile paylas (Ayarlar anahtarlari, varsayilan kapali): arama, kisi, arama gecmisi. -->
@@ -47,6 +49,37 @@
             android:name=".service.NabizService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- Aktar: yalniz aktarim surerken calisir. -->
+        <service
+            android:name=".aktar.AktarService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".aktar.AktarActionReceiver"
+            android:exported="false" />
+
+        <!-- Paylas hedefi: Galeri / Dosyalar / Fotograflar > Paylas > Nabiz (Mac). Direct Share kisayolu share_targets.xml ile. -->
+        <activity
+            android:name=".aktar.ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="Nabız · Mac"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Nabiz.Sheet">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/share_targets" />
+        </activity>
 
         <service
             android:name=".service.NabizTileService"

@@ -15,5 +15,19 @@
     "sas": "538801"
   },
   "gcm": {"key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "counter": 1, "plaintext": "{\"id\":1,\"t\":\"ping\"}", "packet": "00000000000000016ef4d69866ce01322c5a7303ced6539972bd6149d15d86aae12692f305fb8fdc1a15c0"},
-  "frame": {"payload": "010203", "framed": "00000003010203"}
+  "frame": {"payload": "010203", "framed": "00000003010203"},
+  "aktar": {
+    "_aciklama": "docs/protokol.md bolum 13. ikm = kdf.macToPhone || kdf.phoneToMac (oturum okm[0..64)). Veri paketi: gonderen->alici anahtari, sayac 1, acik metin = 0x02 || fid(2 BE) || ofset(8 BE) || bayt.",
+    "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11",
+    "ikm": "3e7994371738fd367f8393c81893a0371df27a71ed52fdd4142ec49917eccef0cbe20cf9b684bdb2a428ae219e708ce69a45856684940b59a7a0165e3df6aaf8",
+    "salt": "bce7c48238461e757ac1ca5492f5cea9b9c96a5bd10cd408685f464a61c624b5",
+    "info": "nabiz/aktar/v1",
+    "senderToReceiver": "6379da35e4ee135bd8a4a795d5bc05e803e7d878f0a55a76dfd891b549cc00f4",
+    "receiverToSender": "e283f6266bf32a445c4666cc3825cddba6b44437a2508c7253b0bf5cc626adbd",
+    "fid": 1,
+    "ofset": 65536,
+    "bayt": "4e6162697a20416b746172",
+    "plaintext": "02000100000000000100004e6162697a20416b746172",
+    "packet": "0000000000000001238273ead467b2cd1937d75adf4594e2b7607a05842563e8d76903c8ec416ffe99f55b34fa46"
+  }
 }

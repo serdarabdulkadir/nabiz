@@ -1,21 +1,24 @@
-// Panel: 344 pt, ustte "Bu Mac | Telefon" hap secici.
+// Panel: 344 pt, ustte "Bu Mac | Telefon | Aktar" hap secici.
 import SwiftUI
 import NabizCore
 
 private enum PanelTab: String, CaseIterable {
     case mac = "Bu Mac"
     case phone = "Telefon"
+    case aktar = "Aktar"
     case ai = "AI"
 }
 
 struct PanelView: View {
     var model: MonitorModel
     @State private var tab: PanelTab = .mac
+    @State private var dropTargeted = false
     private var ai = AIStore.shared
+    private var aktar = AktarModel.shared
 
     /// AI sekmesi yalniz modul acik ve en az bir saglayici aciksa gorunur.
     private var showAI: Bool { PanelModule.ai.isOn && ai.hasEnabled }
-    private var tabs: [PanelTab] { showAI ? PanelTab.allCases : [.mac, .phone] }
+    private var tabs: [PanelTab] { PanelTab.allCases.filter { ($0 != .ai || showAI) && ($0 != .aktar || aktar.enabled) } }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -23,13 +26,17 @@ struct PanelView: View {
             // Yalniz secili sekme yukseklige katki verir; pencerenin ust kenari PanelChrome'da sabit tutulur.
             CappedScroll {
                 ZStack(alignment: .top) {
-                    if tab == .mac {
+                    switch shown {
+                    case .mac:
                         MacTab(snapshot: model.snapshot, model: model)
                             .transition(.directional(forward: false))
-                    } else if tab == .phone || !showAI {
+                    case .phone:
                         PhoneTab(phone: PhoneModel.shared)
                             .transition(.directional(forward: true))
-                    } else {
+                    case .aktar:
+                        AktarTab()
+                            .transition(.directional(forward: true))
+                    case .ai:
                         AITab()
                             .transition(.directional(forward: true))
                     }
@@ -37,16 +44,34 @@ struct PanelView: View {
             }
             footer
         }
-        .animation(Motion.spring, value: tab)
+        .animation(Motion.spring, value: shown)
         .padding(12)
         .frame(width: 344)
         .panelChrome()
+        // Dosya birakma: hangi sekmede olursa olsun Aktar'a gider.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter(\.isFileURL)
+            guard aktar.enabled, !files.isEmpty else { return false }
+            tab = .aktar
+            aktar.send(files)
+            return true
+        } isTargeted: { dropTargeted = $0 }
+        .overlay {
+            if dropTargeted && aktar.enabled {
+                RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
+                    .strokeBorder(Color.blue.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .padding(4).allowsHitTesting(false)
+            }
+        }
         .onAppear { model.panelOpen = true; AIStore.shared.refreshIfStale() }
         .onDisappear { model.panelOpen = false }
     }
 
+    /// Secili sekme gizlenmisse (AI / Aktar kapatildi) Bu Mac'e doner.
+    private var shown: PanelTab { tabs.contains(tab) ? tab : .mac }
+
     private var picker: some View {
-        SlidingPillPicker(options: tabs, selection: tab, title: \.rawValue) { tab = $0 }
+        SlidingPillPicker(options: tabs, selection: shown, title: \.rawValue) { tab = $0 }
     }
 
     private var footer: some View {

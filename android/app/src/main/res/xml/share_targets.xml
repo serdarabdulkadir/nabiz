@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct Share: Mac, Paylas sayfasinda kisi gibi gorunur (kisayol AktarShortcuts ile yayimlanir). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="com.nabiz.android.aktar.ShareActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="com.nabiz.android.category.SHARE_MAC" />
+    </share-target>
+</shortcuts>

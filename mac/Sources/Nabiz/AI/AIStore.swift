@@ -28,6 +28,8 @@ final class AIStore {
     @ObservationIgnored private var lastRefresh = Date.distantPast
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var syncWaiters: [() -> Void] = []
+    @ObservationIgnored private var lastForcedSync = Date.distantPast
 
     enum Trigger { case scheduled, manual, immediate }
 
@@ -116,13 +118,38 @@ final class AIStore {
             for account in accounts(for: id) {
                 pending += 1
                 Task {
-                    defer { pending -= 1 }
                     await load(account, trigger: manual ? .manual : .scheduled)
                     lastUpdated = Date()
                     onChange?()
+                    pending -= 1
+                    if pending == 0 { flushSyncWaiters() }
                 }
             }
         }
+        if pending == 0 { flushSyncWaiters() }
+    }
+
+    /// Telefondan ai.sync (bolum 12). zorla degilse veri 60 sn'den eskiyse, zorla ise en cok 15 sn'de bir gercek yenileme yapar;
+    /// bitince (yenileme gerekmediyse hemen) `done` cagrilir.
+    func sync(force: Bool, done: @escaping () -> Void) {
+        guard hasEnabled else { done(); return }
+        syncWaiters.append(done)
+        if pending > 0 { return }   // surmekte olan yenilemeye katilir
+        if force {
+            if Date().timeIntervalSince(lastForcedSync) >= 15 {
+                lastForcedSync = Date()
+                refresh(manual: true)
+            }
+        } else if AIRefreshPolicy.shouldRefreshOnOpen(lastRefresh: lastRefresh) {
+            refresh()
+        }
+        if pending == 0 { flushSyncWaiters() }
+    }
+
+    private func flushSyncWaiters() {
+        let waiters = syncWaiters
+        syncWaiters = []
+        waiters.forEach { $0() }
     }
 
     private func loadAll(_ id: AIProviderID) async {

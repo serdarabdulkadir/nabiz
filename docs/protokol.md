@@ -202,11 +202,39 @@ Kaynak: Bahadir Nuroglu'nun AI Limit Tracker'i (MIT, izinli; `~/Downloads/ai_lim
 | `t` | Yon | Alanlar |
 |---|---|---|
 | `ai.state` | mac->tel | `saglayicilar`: `[Saglayici]` (bos dizi = AI kapali ya da hicbiri bagli degil) |
+| `ai.sync` | tel->mac | `zorla?` (bool, varsayilan false) |
 
 **Saglayici:** `id` (`claude`/`codex`/`cursor`), `hesapId` (hesap basina benzersiz; yerel hesapta saglayici adi, ek hesapta UUID), `hesap?` (kullanicinin verdigi hesap adi; tek hesapta yok), `ad`, `plan?`, `not?` (or. Cursor "$15,60 / $20"), `sorun?` (veri alinamadiysa kisa metin), `guncel?` (son basarili okuma, epoch sn), `limitler`: `[Limit]`.
 **Limit:** `id`, `ad` (or. "5 saat", "Haftalik", "Opus"), `yuzde` (0-100 tam sayi), `sifirlanma?` (epoch sn), `genel` (bool: model==nil; on yuzde yalniz genel limitler + %90+ olanlar), `tukenme?` (bu hizla dolmasina kalan sn).
 
-- Mac `ai.state`i oturum kurulunca bir kez ve veri degisince yollar (en sik 10 sn'de bir). Mac Ayarlar > AI > "Telefonda goster" (varsayilan ACIK) kapaliysa bos dizi yollar.
-- Ornekler `docs/fixtures/messages.json` icinde `ai-state`, `ai-state-bos`.
+- Mac `ai.state`i oturum kurulunca bir kez ve veri degisince yollar (ilk degisim hemen, art arda degisimler en sik 10 sn'de bir). Mac Ayarlar > AI > "Telefonda goster" (varsayilan ACIK) kapaliysa bos dizi yollar.
+- **`ai.sync` (2026-11-26):** telefon AI sekmesini acinca / gorunur kalirken 60 sn'de bir (`zorla` yok), sekmede asagi cekince `zorla:true` yollar. Mac `zorla` yoksa `refreshIfStale()` mantigiyla (veri 60 sn'den eskiyse) yeniler; `zorla:true` ise en cok 15 sn'de bir gercek yenileme yapar (daha sik gelirse mevcut veriyle yanitlar). Yenileme bitince (gerekmediyse hemen) `ai.state` yollar; bu yanit 10 sn kisitina takilmaz ve icerik ayniysa da yollanir. Veri degisince `ai.state` ilk degisimde hemen gider, art arda degisimler 10 sn'de birlestirilir. Eski Mac `error bilinmeyen_tip` doner; telefon sessizce yok sayar.
+- Ornekler `docs/fixtures/messages.json` icinde `ai-state`, `ai-state-bos`, `ai-sync`, `ai-sync-zorla`.
 - **Coklu hesap:** her hesap `saglayicilar` icinde AYRI bir oge (ayni `id`, farkli `hesapId`). Ek hesaplar web girisiyle eklenir (her hesap ayri `WKWebsiteDataStore(forIdentifier:)` cerez kutusu). Nabiz hicbir aracin OAuth client id'sini KULLANMAZ ve token yenilemez: yerel hesap aracin kendi kaydindan okunur (Claude Code Anahtar Zinciri, `~/.codex/auth.json`, Cursor), oturum duserse "Giris yap" aracin kendi girisini (`claude auth login`, `codex login`) baslatir ya da web girisini acar.
+
+## 13. Aktar: dosya aktarimi (2026-11-26)
+
+AirDrop tarzi Mac <-> Android dosya aktarimi. Kontrol mevcut sifreli kanaldan, veri ayri TCP baglantisindan akar. Protokol surumu 1 kalir (bilinmeyen `t` olumcul degil, bolum 7).
+
+**Kontrol mesajlari** (bolum 5'teki sifreli kanal):
+
+| `t` | Yon | Alanlar |
+|---|---|---|
+| `aktar.teklif` | iki yon (gonderen) | `aid` (UUID metin), `dosyalar`: `[{fid (0'dan sira), ad, boyut (bayt), tur (MIME), degisme? (epoch sn)}]`, `toplam` (bayt), `port?` |
+| `aktar.yanit` | alici | `aid`, `kabul` (bool), `neden?` (`reddedildi`/`yer_yok`/`kapali`), `port?` |
+| `aktar.iptal` | iki yon | `aid` |
+| `aktar.bitti` | alici | `aid`, `sonuc`: `tamam`/`hata`, `hatali?`: `[fid]` |
+
+- Alici Aktar kapaliysa `aktar.yanit` `kabul:false neden:kapali`; yer yetmiyorsa `yer_yok`; kullanici reddederse `reddedildi`.
+- Teklif 2 dk icinde yanitlanmazsa gonderen `aktar.iptal` yollar.
+- `fid`'ler 0'dan ardisik; `ad` yalniz dosya adi (yol ayiricisi, `..` yok; alici temizler); `tur` bilinmiyorsa `application/octet-stream`.
+
+**Veri baglantisi:** yon ne olursa olsun TELEFON, oturumun kurulu oldugu Mac adresine `47823` portundan baglanir. Port doluysa Mac sistem portu acar ve `aktar.teklif` (Mac gonderiyorsa) ya da `aktar.yanit` (Mac aliciysa) icine `port` koyar; telefon o portu kullanir. TCP_NODELAY KAPALI (toplu yazim), buyuk gonderme tamponu.
+- Ilk cerceve duz JSON: `{"t":"aktar.baglan","aid":"..."}`. Mac, `aid` kabul edilmis bir aktarim degilse ya da baglanan aktif oturumun telefonu degilse kapatir.
+- **Anahtar:** HKDF-SHA256(ikm = bu oturumun `okm[0..64)` (bolum 4), salt = SHA-256(UTF-8 `aid`), info = `"nabiz/aktar/v1"`, L = 64). `[0..32)` gonderen->alici, `[32..64)` alici->gonderen (gonderen = `aktar.teklif`'i yollayan). Paket bicimi bolum 5 ile ayni (sayac 1'den, nonce, AAD, tekrar reddi); sayaclar bu baglantiya ozel.
+- **Cerceve** bolum 2 ile ayni (4 bayt uzunluk, yuk en cok 1 048 576). Sifreli acik metnin ilk bayti tur: `0x01` JSON kontrol, `0x02` veri = `fid(uint16 BE) || ofset(uint64 BE) || bayt` (en cok 512 KiB).
+- **Akis:** alici -> gonderen ilk mesaj `{"t":"devam","ofsetler":{"<fid>":n}}` (yarim dosya varsa kaldigi yer; yoksa bos). Gonderen her dosya bitince `{"t":"dosya.son","fid":n,"sha256":"<hex>"}`; alici akisla SHA-256 hesaplar, uymazsa `{"t":"dosya.hata","fid":n}` yollar ve dosyayi bastan ister (gonderen o `fid`'i ofset 0'dan yeniden yollar). Tum dosyalar bitince alici KONTROL kanalindan `aktar.bitti` yollar.
+- **Kopma:** yarim dosya `.nabizpart` uzantisiyla kalir; ayni `aid` 10 dk icinde yeniden baglanabilir (`devam` ile surer). 10 dk sonra yarim dosyalar silinir.
+- **Dosya BAYT BAYT ayni:** yeniden kodlama, kucultme yok; ad ve `degisme` zamani korunur. Alici ayni ad varsa " (2)" ekler.
+- **Test vektoru:** `docs/fixtures/vectors.json` `aktar` bolumu (sabit okm + aid ile turetilen iki anahtar ve bir veri paketi); mesaj ornekleri `messages.json` icinde `aktar-*`. Iki platformun testi bu dosyalari OKUR.
 

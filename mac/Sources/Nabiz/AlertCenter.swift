@@ -16,6 +16,14 @@ enum PhoneNotifID {
     static let catDismiss = "nabiz.tel.kat.kapat"
 }
 
+/// Aktar teklif bildirimi: kategori ve eylem kimlikleri.
+enum AktarNotifID {
+    static let prefix = "nabiz.aktar."
+    static let category = "nabiz.aktar.kat.teklif"
+    static let accept = "nabiz.aktar.eylem.kabul"
+    static let reject = "nabiz.aktar.eylem.red"
+}
+
 final class AlertNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions { [.banner, .list, .sound] }
@@ -24,8 +32,13 @@ final class AlertNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         let action = response.actionIdentifier
         let key = response.notification.request.content.userInfo["anahtar"] as? String
         let text = (response as? UNTextInputNotificationResponse)?.userText
+        let aid = response.notification.request.content.userInfo["aid"] as? String
         await MainActor.run {
             switch action {
+            case AktarNotifID.accept:
+                if let aid { AktarModel.shared.respond(aid, accept: true) }
+            case AktarNotifID.reject:
+                if let aid { AktarModel.shared.respond(aid, accept: false) }
             case PhoneNotifID.reply:
                 if let key, let text { PhoneModel.shared.reply(key, text) }
             case PhoneNotifID.dismiss:
@@ -61,7 +74,7 @@ final class AlertCenter {
         started = true
         loadStates()
         center?.delegate = delegate
-        center?.setNotificationCategories(Self.phoneCategories())
+        center?.setNotificationCategories(Self.phoneCategories().union(Self.aktarCategories()))
         Task {
             await refreshAuthorization(requestIfNeeded: true)
             // Reddedilmisse macOS yeniden sormaz: acilista kendi penceremizle Sistem Ayarlari'na yonlendir.
@@ -178,6 +191,40 @@ final class AlertCenter {
                 UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
             }
         }
+    }
+
+    // MARK: Aktar bildirimleri (kimlik oneki nabiz.aktar.*)
+
+    private static func aktarCategories() -> Set<UNNotificationCategory> {
+        let accept = UNNotificationAction(identifier: AktarNotifID.accept, title: "Kabul et", options: [])
+        let reject = UNNotificationAction(identifier: AktarNotifID.reject, title: "Reddet", options: [])
+        return [UNNotificationCategory(identifier: AktarNotifID.category, actions: [accept, reject], intentIdentifiers: [],
+                                       options: [])]
+    }
+
+    /// "Redmi Note 13 Pro 3 fotograf gondermek istiyor" + Kabul et / Reddet.
+    func aktarOffer(aid: String, body: String) {
+        guard let center else { return }
+        let c = UNMutableNotificationContent()
+        c.title = "Nabız Aktar"
+        c.body = body
+        c.sound = .default
+        c.categoryIdentifier = AktarNotifID.category
+        c.userInfo = ["aid": aid]
+        center.add(UNNotificationRequest(identifier: AktarNotifID.prefix + aid, content: c, trigger: nil))
+    }
+
+    func aktarRemoveOffer(aid: String) {
+        guard let center else { return }
+        center.removeDeliveredNotifications(withIdentifiers: [AktarNotifID.prefix + aid])
+        center.removePendingNotificationRequests(withIdentifiers: [AktarNotifID.prefix + aid])
+    }
+
+    func aktarInfo(title: String, body: String) {
+        guard let center else { return }
+        let c = UNMutableNotificationContent()
+        c.title = title; c.body = body
+        center.add(UNNotificationRequest(identifier: AktarNotifID.prefix + "bilgi." + UUID().uuidString, content: c, trigger: nil))
     }
 
     // MARK: AI limit bildirimleri (kimlik oneki nabiz.ai.*)

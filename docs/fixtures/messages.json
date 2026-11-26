@@ -452,6 +452,47 @@
         "t": "ai.state",
         "saglayicilar": []
       }
+    },
+    {
+      "ad": "ai-sync",
+      "json": {
+        "t": "ai.sync"
+      }
+    },
+    {
+      "ad": "ai-sync-zorla",
+      "json": {
+        "t": "ai.sync",
+        "zorla": true
+      }
+    },
+    {
+      "ad": "aktar-teklif",
+      "json": {
+        "t": "aktar.teklif",
+        "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11",
+        "dosyalar": [
+          {"fid": 0, "ad": "IMG_4471.MOV", "boyut": 3650722201, "tur": "video/quicktime", "degisme": 1790000000},
+          {"fid": 1, "ad": "rapor.pdf", "boyut": 482113, "tur": "application/pdf"}
+        ],
+        "toplam": 3651204314
+      }
+    },
+    {
+      "ad": "aktar-yanit-kabul",
+      "json": {"t": "aktar.yanit", "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11", "kabul": true, "port": 51234}
+    },
+    {
+      "ad": "aktar-yanit-red",
+      "json": {"t": "aktar.yanit", "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11", "kabul": false, "neden": "yer_yok"}
+    },
+    {
+      "ad": "aktar-iptal",
+      "json": {"t": "aktar.iptal", "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11"}
+    },
+    {
+      "ad": "aktar-bitti",
+      "json": {"t": "aktar.bitti", "aid": "6c1f0a52-3b7e-4c1d-9a55-2f0e8d7b4a11", "sonuc": "hata", "hatali": [1]}
     }
   ],
   "hs": {

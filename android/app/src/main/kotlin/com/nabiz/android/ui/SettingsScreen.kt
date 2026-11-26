@@ -153,6 +153,14 @@ fun SettingsScreen(vm: MainViewModel, pinnedName: String?, link: LinkState, onUn
             )
         }
         Text("Veriler yalnız eşleşmiş Mac'e şifreli gider; Mac diske yazmaz.", style = NabizType.caption, color = c.textTertiary, modifier = Modifier.padding(horizontal = Space.lg))
+        SectionLabel("Aktar")
+        val aktarOn by vm.aktarEnabled.collectAsStateWithLifecycle()
+        val aktarAuto by vm.aktarAuto.collectAsStateWithLifecycle()
+        Group {
+            ShareRow("Aktar'ı aç", "Mac ile dosya gönder ve al. Kapalıyken gelen teklifler reddedilir", aktarOn, false) { vm.setAktarEnabled(it) }
+            RowDivider()
+            ShareRow("Eşleşmiş Mac'ten otomatik kabul", "Teklif onay sormadan alınır. Fotoğraflar Pictures/Nabız, videolar Movies/Nabız, diğerleri Download/Nabız'a kaydedilir", aktarAuto, false) { vm.setAktarAuto(it) }
+        }
         SectionLabel("Uyarılar")
         AlertGroup("Telefon", Subject.TELEFON, vm.alerts)
         AlertGroup("Mac", Subject.MAC, vm.alerts)

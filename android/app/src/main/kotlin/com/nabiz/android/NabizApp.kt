@@ -2,6 +2,9 @@ package com.nabiz.android
 
 import android.app.Application
 import android.os.Build
+import com.nabiz.android.aktar.AktarManager
+import com.nabiz.android.aktar.AktarSettings
+import com.nabiz.android.aktar.AndroidAktarStorage
 import com.nabiz.android.alerts.AlertStore
 import com.nabiz.android.peer.MacDiscovery
 import com.nabiz.android.peer.NabizClient
@@ -27,4 +30,7 @@ class NabizApp : Application() {
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" } catch (_: Exception) { "0" }
         NabizClient(store, MacDiscovery(this), deviceName, Build.MODEL, version, { sampler.sample() }, phone)
     }
+    val aktarSettings by lazy { AktarSettings(this) }
+    /** Aktar (dosya aktarimi): kontrol mesajlari, veri baglantisi, durum listesi. */
+    val aktar: AktarManager by lazy { AktarManager(this, client, aktarSettings, AndroidAktarStorage(this)) }
 }

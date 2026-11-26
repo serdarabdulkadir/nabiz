@@ -13,6 +13,14 @@ object Format {
         return if (gb >= 1) String.format(Locale.US, "%.1f GB", gb) else String.format(Locale.US, "%.0f MB", b / 1_048_576.0)
     }
 
+    /** Dosya boyutu: kucuk dosyalar da gorunsun diye KB/B dahil. */
+    fun size(b: Long): String = when {
+        b >= 1_073_741_824 -> String.format(Locale.US, "%.1f GB", b / 1_073_741_824.0)
+        b >= 1_048_576 -> String.format(Locale.US, "%.1f MB", b / 1_048_576.0)
+        b >= 1024 -> String.format(Locale.US, "%.0f KB", b / 1024.0)
+        else -> "$b B"
+    }
+
     fun rate(bps: Long): String = when {
         bps >= 1_048_576 -> String.format(Locale.US, "%.1f MB/s", bps / 1_048_576.0)
         bps >= 1024 -> String.format(Locale.US, "%.0f KB/s", bps / 1024.0)

@@ -21,9 +21,13 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,8 +43,7 @@ import com.nabiz.android.ui.theme.NabizShape
 import com.nabiz.android.ui.theme.NabizType
 import com.nabiz.android.ui.theme.Space
 import com.nabiz.android.ui.theme.nabiz
-import java.text.DateFormat
-import java.util.Date
+import kotlinx.coroutines.delay
 
 @Composable
 private fun providerColor(id: String): Color = when (id) {
@@ -52,15 +55,17 @@ private fun providerColor(id: String): Color = when (id) {
 
 /** Mac'ten gelen AI kullanim limitleri (yalniz gosterim). Karta dokununca tum limitler acilir. */
 @Composable
-fun AiTab(providers: List<AiProvider>) {
-    providers.forEach { AiCard(it) }   // her hesap ayri kart
+fun AiTab(providers: List<AiProvider>, syncing: Boolean = false) {
+    // Geri sayimlar ve "x dk once" metni telefonun yerel saatiyle kendiliginden ilerler.
+    var now by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(Unit) { while (true) { delay(5_000); now = System.currentTimeMillis() / 1000 } }
+    providers.forEach { AiCard(it, now, syncing) }   // her hesap ayri kart
 }
 
 @Composable
-private fun AiCard(p: AiProvider) {
+private fun AiCard(p: AiProvider, now: Long, syncing: Boolean) {
     val c = MaterialTheme.nabiz
     var open by rememberSaveable(p.hesapId) { mutableStateOf(false) }
-    val now = System.currentTimeMillis() / 1000
     val front = AiFormat.frontLimits(p.limitler)
     val tempo = AiFormat.tempo(p)
     val full = front.any { it.yuzde >= 100 }
@@ -107,7 +112,16 @@ private fun AiCard(p: AiProvider) {
                 }
             }
         }
-        p.guncel?.let { Text("Son güncelleme " + DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it * 1000)), style = NabizType.caption, color = c.textTertiary) }
+        val updated = AiFormat.updatedText(p.guncel, now)
+        if (updated != null || syncing) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                if (syncing) CircularProgressIndicator(Modifier.size(10.dp), strokeWidth = 1.5.dp, color = c.textTertiary)
+                Text(
+                    listOfNotNull(updated, if (syncing) "yenileniyor" else null).joinToString(" · "),
+                    style = NabizType.caption, color = c.textTertiary,
+                )
+            }
+        }
     }
 }
 

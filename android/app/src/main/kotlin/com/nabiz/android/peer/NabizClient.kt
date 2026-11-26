@@ -58,6 +58,9 @@ fun disconnectReason(base: LinkReason, macState: PeerMessage.MacState?): LinkRea
 
 data class CmdOutcome(val eylem: String, val sonuc: String)
 
+/** Aktar veri baglantisi icin: oturumun kuruldugu Mac adresi ve oturum anahtar malzemesi (okm[0..64), bolum 13). */
+class AktarLink(val host: InetAddress, val port: Int, val okm: ByteArray, val macName: String)
+
 /**
  * Telefon (istemci) tarafi: Mac'i bulur, baglanir, oturumu tutar, kopunca geri cekilmeyle yeniden dener.
  * PeerSession tek iplik kullanimli oldugu icin tum erisim `lock` altindadir; yazma ayri kanaldan sirayla yapilir.
@@ -96,6 +99,15 @@ class NabizClient(
     private val _ai = MutableStateFlow<List<AiProvider>>(emptyList())
     /** Mac'ten gelen son ai.state saglayicilari; baglanti kopunca temizlenir. */
     val ai: StateFlow<List<AiProvider>> = _ai.asStateFlow()
+    private val _aiAt = MutableStateFlow(0L)
+    /** Her ai.state alininca artan sayac (icerik ayniysa da); yenileme gostergesini kapatir. */
+    val aiAt: StateFlow<Long> = _aiAt.asStateFlow()
+    private val _aktar = MutableSharedFlow<PeerMessage>(extraBufferCapacity = 64)
+    /** Mac'ten gelen aktar.teklif / yanit / iptal / bitti (bolum 13); Aktar yoneticisi dinler. */
+    val aktar: SharedFlow<PeerMessage> = _aktar.asSharedFlow()
+    @Volatile private var _aktarLink: AktarLink? = null
+    /** Oturum hazirsa Aktar veri baglantisi bilgisi; degilse null. */
+    val aktarLink: AktarLink? get() = if (_state.value.phase == LinkPhase.READY) _aktarLink else null
     private val kick = AtomicBoolean(false)
     @Volatile private var preferredId: String? = null
     @Volatile private var lastBad = false
@@ -157,6 +169,9 @@ class NabizClient(
     /** Hazir oturumda herhangi bir mesaj yollar (telefon ozellikleri: bildirim, arama durumu...); oturum yoksa atilir. */
     fun send(m: PeerMessage) = withSession { if (it.phase == PeerSession.Phase.READY) it.send(m) else emptyList() }
 
+    /** AI verisini yenilet (bolum 12). Eski Mac bilinmeyen_tip doner; Err yok sayilir. */
+    fun aiSync(zorla: Boolean) = send(PeerMessage.AiSync(zorla))
+
     fun sendPing() = withSession { it.send(PeerMessage.Ping(rtt.onSent(System.nanoTime()))) }
 
     private fun withSession(block: (PeerSession) -> List<PeerEvent>) {
@@ -176,6 +191,7 @@ class NabizClient(
             try { socket?.close() } catch (_: Exception) { }
             socket = null
             session = null
+            _aktarLink = null
         }
     }
 
@@ -360,6 +376,9 @@ class NabizClient(
                 lastBad = false
                 curTarget?.takeIf { it.serviceName != "remote" }?.let { store.lastMac = PeerStore.LastMac(it.id, it.host.hostAddress ?: "", it.port) }
                 store.lastConnected = System.currentTimeMillis()
+                val km = session?.sessionKeyMaterial
+                val tgt = curTarget
+                _aktarLink = if (km != null && tgt != null) AktarLink(tgt.host, tgt.port, km, session?.peerName.orEmpty()) else null
                 _state.update { it.copy(phase = LinkPhase.READY, sas = null, reason = LinkReason.NONE, macState = null, lastSeenAt = System.currentTimeMillis()) }
             }
             is PeerEvent.Received -> onMessage(e.message)
@@ -446,7 +465,9 @@ class NabizClient(
             is PeerMessage.PermState, is PeerMessage.CallState, is PeerMessage.ContactsPage, is PeerMessage.ContactsChanged,
             is PeerMessage.CallLogPage, is PeerMessage.CallLogChanged, is PeerMessage.NotifList, is PeerMessage.NotifPosted,
             is PeerMessage.NotifRemoved, is PeerMessage.NotifResult -> {}
-            is PeerMessage.AiState -> _ai.value = m.saglayicilar
+            is PeerMessage.AiState -> { _ai.value = m.saglayicilar; _aiAt.update { it + 1 } }
+            is PeerMessage.AiSync -> {}   // tel->mac yonu; Mac yollamaz
+            is PeerMessage.AktarTeklif, is PeerMessage.AktarYanit, is PeerMessage.AktarIptal, is PeerMessage.AktarBitti -> _aktar.tryEmit(m)
         }
     }
 }

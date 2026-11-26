@@ -88,6 +88,18 @@ object AiFormat {
         return front.mapNotNull { it.tukenme }.filter { it > 0 }.minOrNull()?.let { tukenmeText(it) }
     }
 
+    /** "Şimdi güncellendi", "2 dk önce güncellendi", "3 sa önce güncellendi"; zaman yoksa null. */
+    fun updatedText(epochSec: Long?, nowSec: Long): String? {
+        if (epochSec == null) return null
+        val d = (nowSec - epochSec).coerceAtLeast(0)
+        return when {
+            d < 60 -> "Şimdi güncellendi"
+            d < 3_600 -> "${d / 60} dk önce güncellendi"
+            d < 86_400 -> "${d / 3_600} sa önce güncellendi"
+            else -> "${d / 86_400} g önce güncellendi"
+        }
+    }
+
     /** Kart basligi: "Claude" ya da hesap varsa "Claude · İş". */
     fun title(p: AiProvider): String = if (p.hesap.isNullOrBlank()) p.ad else p.ad + " · " + p.hesap
 

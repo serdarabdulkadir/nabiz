@@ -50,6 +50,7 @@ Open Nabız on both devices on the same Wi‑Fi and confirm the 6‑digit code. 
 | **Calls** *(new in 0.4)* | Floating call bubble: answer, decline, hang up, live timer. Recent & missed calls, contacts, dial pad — click any number to call from the phone | Shares call state, contacts and call history — only if you turn it on |
 | **Notifications** *(new in 0.4)* | Phone notifications in the panel, in a Phone window and as macOS banners. **Reply** inline or from the banner, dismiss one, or clear all | Shares notifications — only if you turn it on |
 | **AI limits** *(new in 0.5)* | Claude, Codex and Cursor usage: 5‑hour and weekly limits, "full in 33 min at this pace", alerts at 75 % / 90 % and on reset, several accounts per tool, an **AI** column and 4 icon styles in the menu bar | The same cards in an **AI** tab (only percentages travel to the phone, never tokens) |
+| **Aktar — file transfer** *(new in 0.6)* | Drop files on the **Aktar** tab, or pick them; accept incoming files from a notification. Saved to `~/Downloads/Nabız` | Share from Gallery or any app → **Nabız**; photos/videos land in the Gallery, other files in `Download/Nabız` |
 | **Remote actions** | — | Refresh, lock screen, sleep, wake display; Quick Settings tile |
 | **Alerts** | Battery, charging, storage, CPU, memory, thermal and connection alerts with per‑device thresholds, hysteresis and cool‑down | Same alert engine, shown on the phone |
 | **Look** | SwiftUI `MenuBarExtra`, Liquid Glass on macOS 26 (material fallback on 15), 6 menu bar styles | Jetpack Compose, light + dark, 5 notification designs |
@@ -137,6 +138,15 @@ Based on [AI Limit Tracker](https://github.com/bahadirnuroglu/ai_limit_tracker) 
 
 Nabız never stores or refreshes these tokens and doesn't use any tool's OAuth client id; it only reads what the tools themselves saved. It reads undocumented usage endpoints, so a provider change can break it.
 
+### Aktar (file transfer)
+
+AirDrop‑style transfer between the Mac and the phone, over the same paired, end‑to‑end encrypted link (data on a separate TCP connection, port 47823).
+
+- **Phone → Mac:** in Gallery (or any app) tap **Share → Nabız**. On the Mac, accept from the notification. Files go to `~/Downloads/Nabız` (change it in **Settings → Phone → Aktar**).
+- **Mac → phone:** drop files on the **Aktar** tab of the panel, or tap **Dosya seç**. Photos go to `Pictures/Nabız`, videos to `Movies/Nabız`, everything else to `Download/Nabız`.
+- Files are sent byte for byte: no re‑encoding, EXIF and capture date kept, SHA‑256 checked, an interrupted transfer resumes where it stopped.
+- Incoming files ask first; **auto‑accept from the paired device** is an option (off by default).
+
 ### Privacy
 
 - No servers, no accounts, no analytics. Data only travels between your own two paired devices, encrypted.
@@ -211,6 +221,7 @@ Run `swift test` and `./gradlew testDebugUnitTest` before opening a PR. A wire�
 - **Aramalar (0.4'te yeni):** gelen aramada Mac'te yüzen baloncuk çıkar; Yanıtla, Reddet, Bitir ve süre sayacı vardır. Son ve cevapsız aramalar, kişiler ve tuş takımı da Mac'te. Bir numaraya tıklayınca arama telefondan başlar.
 - **Bildirimler (0.4'te yeni):** telefon bildirimleri panelde, Telefon penceresinde ve macOS bildirimi olarak görünür. Satır içinden ya da bildirimden **yanıt verebilir**, tek tek kapatabilir ya da tümünü kapatabilirsin.
 - **AI limitleri (0.5'te yeni):** Claude, Codex ve Cursor için 5 saatlik ve haftalık limitler, "bu hızla 33 dakikada tükenir" tahmini, %75/%90 ve sıfırlanma bildirimleri, araç başına birden çok hesap, menü çubuğunda AI sütunu ve 4 simge stili. Telefonda **AI** sekmesi. Mac'te **Ayarlar → AI**'dan açılır. [Bahadır Nuroğlu'nun AI Limit Tracker](https://github.com/bahadirnuroglu/ai_limit_tracker)'ından uyarlandı (MIT, izinli). Token'lar saklanmaz, telefona yalnız yüzdeler gider.
+- **Aktar (0.6'da yeni):** AirDrop gibi dosya aktarımı. Telefonda Galeri'den **Paylaş → Nabız**, Mac'te panelin **Aktar** sekmesine sürükle. Dosya bayt bayt aynı gider (sıkıştırma yok, EXIF ve çekim tarihi korunur), kopunca kaldığı yerden sürer. Mac'te `~/Downloads/Nabız`, telefonda fotoğraf/video Galeri'ye, diğerleri `Download/Nabız`. Gelen dosya önce sorulur; eşleşmiş cihazdan otomatik kabul isteğe bağlı.
 - **Uyarılar:** pil, şarj, depolama, CPU, bellek, ısınma ve bağlantı için cihaz başına eşik.
 
 Uydurma değer yoktur: okunamayan her şey `--` görünür. Android 8 ve sonrası CPU kullanımını vermediği için telefonda CPU karosu yoktur.

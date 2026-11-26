@@ -76,6 +76,14 @@ class NabizService : Service() {
         }
         app.phone.start(scope)
         client.start(scope)
+        app.aktar.start()
+        // Direct Share: eslesmis Mac Paylas sayfasinda kisi gibi gorunur.
+        scope.launch {
+            app.store.pinned.collect { p ->
+                if (p != null && p.name.isNotBlank()) com.nabiz.android.aktar.AktarShortcuts.publish(this@NabizService, p.name)
+                else com.nabiz.android.aktar.AktarShortcuts.remove(this@NabizService)
+            }
+        }
 
         // Mac karti: degisim yoksa guncelleme yok, en cok saniyede bir.
         scope.launch {

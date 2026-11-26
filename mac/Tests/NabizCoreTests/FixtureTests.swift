@@ -128,3 +128,14 @@ private func hex(_ d: Data) -> String { d.map { String(format: "%02x", $0) }.joi
     let frames = try buf.append(unhex(f["framed"]!))
     #expect(frames == [unhex(f["payload"]!)])
 }
+
+@Test func aiSyncOrnekleriCozulur() throws {
+    let root = try loadJSON("messages.json")
+    let items = try #require(root["ornekler"] as? [[String: Any]])
+    for (ad, zorla) in [("ai-sync", false), ("ai-sync-zorla", true)] {
+        let json = try #require(items.first { $0["ad"] as? String == ad }?["json"])
+        let env = try PeerCodec.decode(try JSONSerialization.data(withJSONObject: json))
+        #expect(env.message == .aiSync(zorla: zorla))
+        #expect(env.message.type == "ai.sync")
+    }
+}
