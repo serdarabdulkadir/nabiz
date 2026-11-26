@@ -13,8 +13,8 @@ struct PanelView: View {
     var model: MonitorModel
     @State private var tab: PanelTab = .mac
     @State private var dropTargeted = false
-    private var ai = AIStore.shared
-    private var aktar = AktarModel.shared
+    private let ai = AIStore.shared
+    private let aktar = AktarModel.shared
 
     /// AI sekmesi yalniz modul acik ve en az bir saglayici aciksa gorunur.
     private var showAI: Bool { PanelModule.ai.isOn && ai.hasEnabled }
